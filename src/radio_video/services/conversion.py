@@ -27,6 +27,7 @@ logger = logging.getLogger(__name__)
 STDERR_TAIL_LINES = 40
 CLEANUP_ATTEMPTS = 25
 CLEANUP_RETRY_MS = 200
+EXIT_CODE_PREFIX = "FFmpeg exited with code "
 
 
 class ConversionError(RadioVideoError):
@@ -160,7 +161,8 @@ class ConversionRunner(QObject):
         if exit_status is QProcess.ExitStatus.NormalExit and exit_code == 0:
             self._finish_succeeded()
             return
-        detail = "\n".join(self._stderr) or f"FFmpeg exited with code {exit_code}"
+        # The exit code ends the details so the failure can be classified and reported.
+        detail = "\n".join([*self._stderr, f"{EXIT_CODE_PREFIX}{exit_code}"])
         self._finish_failed(detail)
 
     def _finish_succeeded(self) -> None:
