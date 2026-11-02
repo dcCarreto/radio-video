@@ -12,8 +12,8 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from PySide6.QtCore import QPoint, QRect, QRectF, QSize, Qt
-from PySide6.QtGui import QPainter, QPaintEvent
+from PySide6.QtCore import QPoint, QRectF, QSize, Qt
+from PySide6.QtGui import QPainter, QPaintEvent, QPixmap, QRegion
 from PySide6.QtWidgets import (
     QApplication,
     QButtonGroup,
@@ -30,6 +30,7 @@ from PySide6.QtWidgets import (
 )
 
 from radio_video.ui import icons, theme
+from radio_video.ui.gallery_components import components_page
 from radio_video.ui.native.dwm import style_title_bar
 from radio_video.ui.theme import fonts
 from radio_video.ui.theme.fonts import TextStyle
@@ -189,6 +190,7 @@ def foundation_pages() -> list[GalleryPage]:
         GalleryPage("Foundations: type", type_page),
         GalleryPage("Foundations: icons", icons_page),
         GalleryPage("Foundations: focus", focus_page),
+        GalleryPage("Components", components_page),
     ]
 
 
@@ -198,7 +200,7 @@ class GalleryWindow(QMainWindow):
         self.setWindowTitle("Radio/Video · UI gallery")
         self.setWindowIcon(icons.app_icon())
         self._pages = list(pages)
-        self._built: dict[int, QWidget] = {}
+        self._built: dict[int, QScrollArea] = {}
 
         self.list = QListWidget()
         self.list.setFixedWidth(260)
@@ -231,7 +233,7 @@ class GalleryWindow(QMainWindow):
         theme.current().changed.connect(self._on_theme_changed)
         self.list.setCurrentRow(0)
 
-    def show_page(self, index: int) -> QWidget:
+    def show_page(self, index: int) -> QScrollArea:
         if index not in self._built:
             scroll = QScrollArea()
             scroll.setWidgetResizable(True)
@@ -256,6 +258,21 @@ def _slug(text: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")
 
 
+def render_page(scroll: QScrollArea) -> QPixmap:
+    """Render the whole page, beyond the visible area, over the window background."""
+    content = scroll.widget()
+    if content is None:
+        return scroll.grab()
+    content.resize(
+        scroll.viewport().width(), max(content.sizeHint().height(), scroll.viewport().height())
+    )
+    QApplication.processEvents()
+    image = QPixmap(content.size())
+    image.fill(theme.palette().bg)
+    content.render(image, QPoint(0, 0), QRegion(), QWidget.RenderFlag.DrawChildren)
+    return image
+
+
 def capture(window: GalleryWindow, pages: Sequence[GalleryPage], folder: Path) -> list[Path]:
     folder.mkdir(parents=True, exist_ok=True)
     saved: list[Path] = []
@@ -263,12 +280,10 @@ def capture(window: GalleryWindow, pages: Sequence[GalleryPage], folder: Path) -
     for scheme in Scheme:
         manager.set_override(scheme)
         for index, page in enumerate(pages):
-            widget = window.show_page(index)
+            scroll = window.show_page(index)
             QApplication.processEvents()
             path = folder / f"{_slug(page.title)}-{scheme.value}.png"
-            # Grab through the window so transparent viewports show the window background.
-            area = QRect(widget.mapTo(window, QPoint(0, 0)), widget.size())
-            window.grab(area).save(str(path))
+            render_page(scroll).save(str(path))
             saved.append(path)
     manager.set_override(None)
     return saved
