@@ -16,7 +16,7 @@ obligations that apply when Radio/Video is distributed.
 | Project | [Qt for Python (PySide6)](https://doc.qt.io/qtforpython-6/) |
 | License used | GNU Lesser General Public License v3 (LGPLv3) |
 | Also available under | GPLv2, GPLv3, Qt commercial license |
-| How it is used | Imported Python package, dynamically linked Qt libraries |
+| How it is used | Imported Python packages (`PySide6-Essentials`, `PySide6-Addons`), dynamically linked Qt libraries |
 
 Obligations when distributing binaries that include Qt or PySide6:
 
