@@ -1,14 +1,16 @@
 from __future__ import annotations
 
+from collections.abc import Collection
 from pathlib import Path
 
-from PySide6.QtCore import QStandardPaths, Slot
-from PySide6.QtGui import QAction, QDragEnterEvent, QDropEvent, QKeySequence
+from PySide6.QtCore import QStandardPaths, Qt, Slot
+from PySide6.QtGui import QAction, QCloseEvent, QDragEnterEvent, QDropEvent, QKeySequence
 from PySide6.QtWidgets import (
     QApplication,
     QFileDialog,
     QMainWindow,
     QMessageBox,
+    QSplitter,
     QStackedWidget,
     QWidget,
 )
@@ -17,9 +19,11 @@ from radio_video import APP_NAME, __version__
 from radio_video.ffmpeg.locator import FFmpegTools
 from radio_video.models.media import MediaInfo
 from radio_video.services.analysis import MediaAnalyzer
+from radio_video.services.conversion import ConversionRunner
 from radio_video.ui.drop_area import DropArea, local_files
 from radio_video.ui.file_types import open_file_filter
 from radio_video.ui.media_info_view import MediaInfoView
+from radio_video.ui.simple_mode import SimpleModePanel
 
 REPOSITORY_URL = "https://github.com/dcCarreto/radio-video"
 
@@ -29,11 +33,12 @@ class MainWindow(QMainWindow):
         self,
         tools: FFmpegTools | None,
         tools_error: str | None = None,
+        encoders: Collection[str] = (),
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self.setWindowTitle(APP_NAME)
-        self.resize(900, 600)
+        self.resize(960, 720)
         self.setAcceptDrops(True)
 
         self._tools = tools
@@ -44,17 +49,27 @@ class MainWindow(QMainWindow):
 
         self.drop_area = DropArea()
         self.info_view = MediaInfoView()
+        self.media_page = QSplitter(Qt.Orientation.Vertical)
+        self.media_page.setChildrenCollapsible(False)
+        self.media_page.addWidget(self.info_view)
         self.pages = QStackedWidget()
         self.pages.addWidget(self.drop_area)
-        self.pages.addWidget(self.info_view)
+        self.pages.addWidget(self.media_page)
         self.setCentralWidget(self.pages)
 
         self.analyzer: MediaAnalyzer | None = None
+        self.runner: ConversionRunner | None = None
+        self.simple_panel: SimpleModePanel | None = None
         if tools is not None:
             self.analyzer = MediaAnalyzer(tools.ffprobe, parent=self)
             self.analyzer.started.connect(self._on_analysis_started)
             self.analyzer.analyzed.connect(self._on_analyzed)
             self.analyzer.failed.connect(self._on_analysis_failed)
+            self.runner = ConversionRunner(tools.ffmpeg, parent=self)
+            self.simple_panel = SimpleModePanel(self.runner, encoders)
+            self.simple_panel.busy_changed.connect(self._on_busy_changed)
+            self.media_page.addWidget(self.simple_panel)
+            self.media_page.setStretchFactor(0, 1)
 
         self._create_actions()
         self._create_menus()
@@ -111,10 +126,19 @@ class MainWindow(QMainWindow):
 
     @Slot(Path)
     def open_file(self, path: Path) -> None:
-        if self.analyzer is None:
+        if self.analyzer is None or self.converting:
             return
         self._last_dir = str(path.parent)
         self.analyzer.analyze(path)
+
+    @property
+    def converting(self) -> bool:
+        return self.runner is not None and self.runner.is_running
+
+    @Slot(bool)
+    def _on_busy_changed(self, busy: bool) -> None:
+        self.open_action.setEnabled(not busy)
+        self.setAcceptDrops(not busy)
 
     @Slot(Path)
     def _on_analysis_started(self, path: Path) -> None:
@@ -124,7 +148,9 @@ class MainWindow(QMainWindow):
     def _on_analyzed(self, info: MediaInfo) -> None:
         self._media = info
         self.info_view.set_media(info)
-        self.pages.setCurrentWidget(self.info_view)
+        if self.simple_panel is not None:
+            self.simple_panel.set_media(info)
+        self.pages.setCurrentWidget(self.media_page)
         self.setWindowTitle(f"{info.path.name} — {APP_NAME}")
         self.statusBar().showMessage(f"Loaded {info.path.name}", 5000)
 
@@ -153,3 +179,19 @@ class MainWindow(QMainWindow):
         if len(files) == 1:
             event.acceptProposedAction()
             self.open_file(files[0])
+
+    def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802
+        if self.runner is not None and self.runner.is_running:
+            answer = QMessageBox.question(
+                self,
+                "Conversion in Progress",
+                "A conversion is still running. Cancel it and quit?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
+            )
+            if answer != QMessageBox.StandardButton.Yes:
+                event.ignore()
+                return
+            self.runner.cancel()
+            self.runner.wait()
+        super().closeEvent(event)

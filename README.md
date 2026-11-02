@@ -35,19 +35,28 @@ full control over encoding parameters.
   and cancellation. Output is written to a temporary file and moved into place only on success, so
   failed or canceled conversions leave nothing behind. Supports video and audio codec settings,
   resolution, frame rate, pixel format, audio bitrate, sample rate and channels, stream copy, audio
-  extraction, time ranges and metadata preservation. Not yet available in the user interface.
+  extraction, time ranges and metadata preservation.
+- Simple Mode in the main window:
+  - Output formats: MP4 (H.264 or H.265 with AAC), MKV (H.264 + AAC), WebM (VP9 + Opus), MP3,
+    AAC (M4A), Opus, Ogg Vorbis, FLAC and WAV. Only formats whose encoders are present in the
+    installed FFmpeg are offered, and video formats only for sources that contain video.
+  - Quality presets (High, Balanced, Small file); lossless formats always keep full quality.
+  - Destination folder selection. Output names never overwrite existing files.
+  - Output summary: file name, output streams and estimated size when it is predictable
+    (bitrate-based and uncompressed audio).
+  - Progress with percentage, speed and remaining time; cancel; Show in Folder after success.
+  - Opening other files is blocked while a conversion runs, and closing the window asks for
+    confirmation.
 
 ## Planned Features
 
-- Simple Mode: output format, quality preset, destination folder, estimated output, conversion
-  progress and cancellation in the main window.
 - Advanced Mode: video and audio codecs, bitrate, CRF, resolution, aspect ratio, frame rate,
   pixel format, sample rate, channels, filters, track selection and container options.
 - Preview player with short (10–20 s) and full previews generated from the real settings.
 - Batch conversion, conversion queue and conversion history.
-- Audio extraction and stream copy when re-encoding is not needed.
+- Stream copy when re-encoding is not needed.
 - Hardware acceleration detection (NVENC, Quick Sync, AMF).
-- Estimated output size, error reporting and cleanup of temporary files.
+- Preservation of subtitles and multiple audio tracks.
 - Windows installer.
 
 ## Technology Stack
@@ -94,8 +103,10 @@ radio-video            # installed entry point
 python -m radio_video  # equivalent
 ```
 
-Pass `--debug` for verbose logging. The application can currently open and analyze media files;
-conversion is not available yet.
+Pass `--debug` for verbose logging.
+
+Open a file, choose a format, quality and destination folder in the **Convert** panel, and press
+**Convert**.
 
 ## Building
 

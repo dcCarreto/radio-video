@@ -7,6 +7,7 @@ from collections.abc import Sequence
 from PySide6.QtWidgets import QApplication
 
 from radio_video import APP_NAME, __version__
+from radio_video.ffmpeg.capabilities import CapabilityError, list_encoders
 from radio_video.ffmpeg.locator import FFmpegNotFoundError, FFmpegTools, locate_tools
 from radio_video.ui.main_window import MainWindow
 
@@ -27,13 +28,17 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     tools: FFmpegTools | None = None
     tools_error: str | None = None
+    encoders: frozenset[str] = frozenset()
     try:
         tools = locate_tools()
         logger.info("Using ffmpeg %s and ffprobe %s", tools.ffmpeg, tools.ffprobe)
+        encoders = list_encoders(tools.ffmpeg)
     except FFmpegNotFoundError as exc:
         tools_error = str(exc)
         logger.error(tools_error)
+    except CapabilityError as exc:
+        logger.error(str(exc))
 
-    window = MainWindow(tools, tools_error)
+    window = MainWindow(tools, tools_error, encoders)
     window.show()
     return app.exec()

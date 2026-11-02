@@ -123,7 +123,7 @@ def test_window_opens_file(qtbot: QtBot, ffmpeg_tools: FFmpegTools, sample_video
     assert window.analyzer is not None
     with qtbot.waitSignal(window.analyzer.analyzed, timeout=15000):
         window.open_file(sample_video)
-    assert window.pages.currentWidget() is window.info_view
+    assert window.pages.currentWidget() is window.media_page
     assert window.media is not None
     assert window.media.path == sample_video
     assert window.info_view.streams.topLevelItemCount() == 3
