@@ -173,6 +173,8 @@ A cumulative history of changes merged into `dev`, newest first.
 
 ### 2026-11-02
 
+- **#15 chore: depend on PySide6 Essentials and Addons only**: installs only the Qt modules the
+  application uses, dropping Qt WebEngine and Qt PDF (about 130 MB) from the installation.
 - **#11 feat: add preview player with short and full previews**: previews converted with the
   selected settings, either a 15-second sample or the whole file, played in a playback-only
   player and deleted when closed. A short preview also measures the output size for
