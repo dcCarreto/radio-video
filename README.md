@@ -173,6 +173,14 @@ A cumulative history of changes merged into `dev`, newest first.
 
 ### 2026-11-02
 
+- **#22 fix: make release publishing resilient to transient API failures**: publishing skips
+  releases that already exist, replaces leftover drafts, retries failures and accepts releases
+  GitHub published despite an error; release notes leave out repository bookkeeping.
+- **#21 ci: add job timeouts and stack dumps for stalled tests**: CI jobs fail within 20 minutes
+  instead of hanging, and stalled tests print the stack of every thread.
+- **#19 ci: bump actions/checkout from 4 to 7** and **#18 ci: bump actions/setup-python from 5
+  to 7**: GitHub Actions dependency updates.
+- **v0.1.0 released** from #17.
 - **#15 chore: depend on PySide6 Essentials and Addons only**: installs only the Qt modules the
   application uses, dropping Qt WebEngine and Qt PDF (about 130 MB) from the installation.
 - **#11 feat: add preview player with short and full previews**: previews converted with the
