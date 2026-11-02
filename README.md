@@ -125,6 +125,9 @@ A cumulative history of changes merged into `dev`, newest first.
 
 ### 2026-11-02
 
+- **#3 feat: add FFprobe media analysis**: locates FFmpeg and FFprobe (environment variables,
+  bundled directories, `PATH`) and reads container and stream metadata into typed models, with
+  clear errors for missing, unreadable or non-media files.
 - **#1 chore: set up project structure, tooling and CI**: Python packaging with Git-tag
   versioning, Ruff, mypy and pytest configuration, CI checks on pull requests (branch policy,
   lint, Windows tests with FFmpeg, dependency audit, package build), automated semantic-version
