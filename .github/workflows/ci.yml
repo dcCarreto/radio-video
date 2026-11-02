@@ -82,15 +82,15 @@ jobs:
         run: |
           ffmpeg -hide_banner -version
           ffprobe -hide_banner -version
-      - name: Repeat preview dialog tests (diagnostic)
-        timeout-minutes: 12
+      - name: Repeat full test suite (diagnostic)
+        timeout-minutes: 15
         env:
           RADIO_VIDEO_REQUIRE_FFMPEG: "1"
         shell: bash
         run: |
-          for i in $(seq 1 20); do
+          for i in $(seq 1 15); do
             echo "::group::iteration $i"
-            pytest -q -p no:cacheprovider -o faulthandler_timeout=60 tests/ui/test_preview_dialog.py || { echo "::error::iteration $i failed"; exit 1; }
+            pytest -q -p no:cacheprovider -o faulthandler_timeout=60 || { echo "::error::iteration $i failed"; exit 1; }
             echo "::endgroup::"
           done
       - name: Run tests
