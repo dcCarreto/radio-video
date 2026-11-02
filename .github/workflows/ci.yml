@@ -21,6 +21,7 @@ jobs:
     name: Branch policy
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Validate source and target branches
         env:
@@ -43,6 +44,7 @@ jobs:
   lint:
     name: Lint and type check
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v7
@@ -61,6 +63,7 @@ jobs:
   test:
     name: Test (Python ${{ matrix.python-version }})
     runs-on: windows-latest
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
@@ -79,6 +82,17 @@ jobs:
         run: |
           ffmpeg -hide_banner -version
           ffprobe -hide_banner -version
+      - name: Repeat preview dialog tests (diagnostic)
+        timeout-minutes: 12
+        env:
+          RADIO_VIDEO_REQUIRE_FFMPEG: "1"
+        shell: bash
+        run: |
+          for i in $(seq 1 20); do
+            echo "::group::iteration $i"
+            pytest -q -p no:cacheprovider -o faulthandler_timeout=60 tests/ui/test_preview_dialog.py || { echo "::error::iteration $i failed"; exit 1; }
+            echo "::endgroup::"
+          done
       - name: Run tests
         env:
           RADIO_VIDEO_REQUIRE_FFMPEG: "1"
@@ -87,6 +101,7 @@ jobs:
   dependencies:
     name: Dependency check
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v7
@@ -103,6 +118,7 @@ jobs:
   build:
     name: Build package
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
         with:
