@@ -95,17 +95,21 @@ class Note(QFrame):
         icon_column.setContentsMargins(0, 1, 0, 0)
         icon_column.addWidget(self.icon)
         icon_column.addStretch()
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(12, 10, 12, 10)
-        layout.setSpacing(10)
-        layout.addLayout(icon_column)
-        layout.addWidget(self.text, 1)
+        self._layout = QHBoxLayout(self)
+        self._layout.setContentsMargins(12, 10, 12, 10)
+        self._layout.setSpacing(10)
+        self._layout.addLayout(icon_column)
+        self._layout.addWidget(self.text, 1)
         self.set_tone(tone, icon)
         self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Minimum)
         follow_theme(self)
 
     def set_text(self, text: str) -> None:
         self.text.setText(text)
+
+    def add_widget(self, widget: QWidget) -> None:
+        """Add an action, such as a button, after the text."""
+        self._layout.addWidget(widget, 0, Qt.AlignmentFlag.AlignVCenter)
 
     def set_tone(self, tone: str | None, icon: IconName | None = None) -> None:
         self._tone = tone

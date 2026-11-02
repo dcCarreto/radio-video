@@ -1,0 +1,75 @@
+"""Video surface with a persistent "Converted preview" badge.
+
+QVideoWidget renders into a native child window that other widgets cannot be drawn over,
+so frames arrive through a QVideoSink and are painted here, badge included.
+"""
+
+from __future__ import annotations
+
+from PySide6.QtCore import QRectF, QSize, Qt
+from PySide6.QtGui import QImage, QPaintEvent
+from PySide6.QtMultimedia import QVideoFrame, QVideoSink
+from PySide6.QtWidgets import QSizePolicy, QWidget
+
+from radio_video.ui import theme
+from radio_video.ui.widgets.badge import BadgeTone, badge_size, paint_badge
+from radio_video.ui.widgets.painting import antialiased, fill_rounded, follow_theme
+
+BADGE_INSET = 12
+RADIUS = 4
+
+
+class VideoCanvas(QWidget):
+    def __init__(self, badge_text: str, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._badge_text = badge_text
+        self._image = QImage()
+        self.sink = QVideoSink(self)
+        self.sink.videoFrameChanged.connect(self._on_frame)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.setAccessibleName(badge_text)
+        follow_theme(self)
+
+    def has_frame(self) -> bool:
+        return not self._image.isNull()
+
+    def show_image(self, image: QImage) -> None:
+        """Show a still frame, for the UI gallery."""
+        self._image = image
+        self.update()
+
+    def clear(self) -> None:
+        self._image = QImage()
+        self.update()
+
+    def _on_frame(self, frame: QVideoFrame) -> None:
+        if frame.isValid():
+            self._image = frame.toImage()
+            self.update()
+
+    def sizeHint(self) -> QSize:  # noqa: N802
+        return QSize(640, 360)
+
+    def minimumSizeHint(self) -> QSize:  # noqa: N802
+        return QSize(160, 90)
+
+    def paintEvent(self, event: QPaintEvent) -> None:  # noqa: N802
+        painter = antialiased(self)
+        p = theme.palette()
+        rect = QRectF(self.rect())
+        fill_rounded(painter, rect, RADIUS, p.video)
+        if not self._image.isNull():
+            image_size = self._image.size().toSizeF()
+            scaled = image_size.scaled(rect.size(), Qt.AspectRatioMode.KeepAspectRatio)
+            target = QRectF(0, 0, scaled.width(), scaled.height())
+            target.moveCenter(rect.center())
+            painter.setRenderHint(painter.RenderHint.SmoothPixmapTransform)
+            painter.drawImage(target, self._image)
+        size = badge_size(self._badge_text, BadgeTone.ACCENT, "Eye")
+        paint_badge(
+            painter,
+            QRectF(BADGE_INSET, BADGE_INSET, size.width(), size.height()),
+            self._badge_text,
+            BadgeTone.ACCENT,
+            "Eye",
+        )

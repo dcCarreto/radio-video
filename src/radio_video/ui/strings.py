@@ -500,3 +500,49 @@ PLANNED_SETTINGS = QT_TRANSLATE_NOOP(
 PLANNED_ADVANCED = QT_TRANSLATE_NOOP(
     "RadioVideo", "Advanced Mode isn’t built yet. This shows how it will work."
 )
+
+# Preview window
+PREVIEW_WINDOW_TITLE = QT_TRANSLATE_NOOP("RadioVideo", "Converted preview: {name}")
+PREVIEW_BADGE = QT_TRANSLATE_NOOP("RadioVideo", "Converted preview")
+PREVIEW_PART_SAMPLE = QT_TRANSLATE_NOOP("RadioVideo", "{length} starting at {start} of {total}")
+PREVIEW_PART_FULL = QT_TRANSLATE_NOOP("RadioVideo", "The whole file, {total}")
+PREVIEW_CREATING_TITLE = QT_TRANSLATE_NOOP("RadioVideo", "Creating the preview…")
+PREVIEW_CREATING_SAMPLE = QT_TRANSLATE_NOOP(
+    "RadioVideo", "Converting a 15-second sample with your exact settings."
+)
+PREVIEW_CREATING_FULL = QT_TRANSLATE_NOOP(
+    "RadioVideo", "Converting the whole file with your exact settings."
+)
+CANCEL = QT_TRANSLATE_NOOP("RadioVideo", "Cancel")
+PREVIEW_READY_NOTE = QT_TRANSLATE_NOOP(
+    "RadioVideo", "This is the converted output, not the original file."
+)
+PREVIEW_SIDE_TITLE = QT_TRANSLATE_NOOP("RadioVideo", "This preview")
+PREVIEW_PART = QT_TRANSLATE_NOOP("RadioVideo", "Part")
+PREVIEW_SIZE = QT_TRANSLATE_NOOP("RadioVideo", "Preview size")
+PREVIEW_SIZE_VALUE = QT_TRANSLATE_NOOP("RadioVideo", "{size} for {length}")
+PREVIEW_FULL_SIZE = QT_TRANSLATE_NOOP("RadioVideo", "Estimated full size")
+PREVIEW_FULL_SIZE_PENDING = QT_TRANSLATE_NOOP("RadioVideo", "Measured when the preview is ready")
+PREVIEW_MEASURED_HERE = QT_TRANSLATE_NOOP("RadioVideo", "Measured from this preview")
+PREVIEW_CALCULATED = QT_TRANSLATE_NOOP("RadioVideo", "Calculated from the bitrate")
+PREVIEW_SETTINGS_USED = QT_TRANSLATE_NOOP("RadioVideo", "Settings used")
+PREVIEW_AUDIO_TITLE = QT_TRANSLATE_NOOP("RadioVideo", "Audio preview")
+PREVIEW_AUDIO_TEXT = QT_TRANSLATE_NOOP("RadioVideo", "{settings} · {track}")
+PREVIEW_FAILED_TITLE = QT_TRANSLATE_NOOP("RadioVideo", "The preview couldn’t be created")
+PREVIEW_FAILED_AT = QT_TRANSLATE_NOOP(
+    "RadioVideo",
+    "FFmpeg stopped while reading the file around {time}. The original may be damaged at that "
+    "point.",
+)
+PREVIEW_FAILED_AT_DO = QT_TRANSLATE_NOOP(
+    "RadioVideo",
+    "Try again. If it keeps failing, open the original in a media player to check that part.",
+)
+PREVIEW_CANCELED_TITLE = QT_TRANSLATE_NOOP("RadioVideo", "Preview canceled")
+PREVIEW_CANCELED_TEXT = QT_TRANSLATE_NOOP(
+    "RadioVideo", "Nothing was saved. Your settings haven’t changed."
+)
+PREVIEW_AGAIN = QT_TRANSLATE_NOOP("RadioVideo", "Create Preview Again")
+PREVIEW_CONVERT_FULL = QT_TRANSLATE_NOOP("RadioVideo", "Convert Full File")
+PREVIEW_OUTDATED = QT_TRANSLATE_NOOP("RadioVideo", "Your settings changed after this preview.")
+PREVIEW_UPDATE = QT_TRANSLATE_NOOP("RadioVideo", "Update Preview")

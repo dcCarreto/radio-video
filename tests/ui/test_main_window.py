@@ -253,11 +253,15 @@ def test_preview_measures_size(
     assert output.estimate_value.text() == "Depends on the content"
 
     window.open_preview(PreviewKind.SAMPLE)
-    dialog = window.preview_dialog
-    assert dialog is not None
-    with qtbot.waitSignal(dialog.generator.ready, timeout=TIMEOUT_MS):
+    preview = window.preview_window
+    assert preview is not None
+    with qtbot.waitSignal(preview.ready, timeout=TIMEOUT_MS):
         pass
     assert output.estimate_how.text() == "Measured from a preview."
-    dialog.reject()
+    assert preview.convert_button.isVisibleTo(preview)
     window.machine.set_quality(Quality.HIGH)
+    assert preview.outdated.isVisibleTo(preview)
     assert output.estimate_value.text() == "Depends on the content"
+    preview.close()
+    assert window.preview_window is None
+    assert window.machine.state.preview is None
