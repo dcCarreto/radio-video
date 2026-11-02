@@ -2,11 +2,12 @@
 
 Radio/Video is a free and open-source desktop application for converting audio and video files
 between formats. It uses [FFmpeg](https://ffmpeg.org/) for all media processing and provides a
-Qt-based interface with two modes: a Simple Mode for quick conversions and an Advanced Mode for
-full control over encoding parameters.
+Qt-based interface. Simple Mode covers common conversions with presets; an Advanced Mode with full
+control over encoding parameters is planned.
 
-> **Status:** early development. The application is not usable yet. See
-> [Current Features](#current-features) for what exists today.
+> **Status:** early development. Media analysis, Simple Mode conversion and previews work; see
+> [Current Features](#current-features) for details and [Planned Features](#planned-features)
+> for what is still missing.
 
 ## Goals
 
@@ -122,6 +123,16 @@ python -m build
 ```
 
 This produces a source distribution and a wheel in `dist/`. A Windows installer is planned.
+
+## Installing a Release
+
+Each [GitHub release](https://github.com/dcCarreto/radio-video/releases) includes a wheel. With
+Python 3.11 or newer and FFmpeg installed:
+
+```powershell
+python -m pip install radio_video-<version>-py3-none-any.whl
+radio-video
+```
 
 ## Project Structure
 
