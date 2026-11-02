@@ -173,6 +173,10 @@ A cumulative history of changes merged into `dev`, newest first.
 
 ### 2026-11-02
 
+- **#24 feat(ui): add design tokens, theme manager, icons and UI gallery**: foundation of the
+  redesigned interface: light and dark colour tokens checked for WCAG AA contrast, a theme that
+  follows the Windows colour scheme, the type scale, bundled Lucide icons, a keyboard focus ring
+  and a `--ui-gallery` debug window for comparing screens with the design.
 - **#22 fix: make release publishing resilient to transient API failures**: publishing skips
   releases that already exist, replaces leftover drafts, retries failures and accepts releases
   GitHub published despite an error; release notes leave out repository bookkeeping.
