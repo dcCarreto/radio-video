@@ -69,5 +69,31 @@ def test_release_notes_groups_by_type() -> None:
     assert "Merge pull request" not in notes
 
 
+def test_release_notes_skip_housekeeping() -> None:
+    commits = [
+        Commit.parse("feat: add queue (#21)"),
+        Commit.parse("docs: update future updates history (#22)"),
+        Commit.parse("chore(release): Radio/Video 0.2.0 (#23)"),
+        Commit.parse("chore: sync main into dev after v0.1.0 (#20)"),
+        Commit.parse("docs: describe advanced mode (#24)"),
+    ]
+    notes = release_notes(commits)
+    assert "- add queue (#21)" in notes
+    assert "- describe advanced mode (#24)" in notes
+    assert "future updates" not in notes
+    assert "Radio/Video 0.2.0" not in notes
+    assert "sync main" not in notes
+
+
+def test_housekeeping_still_counts_for_version_bump() -> None:
+    commits = [Commit.parse("docs: update future updates history (#22)")]
+    assert next_version("v0.1.0", commits) == "0.1.1"
+
+
+def test_scope_is_parsed() -> None:
+    assert Commit.parse("chore(release): Radio/Video 0.1.0").scope == "release"
+    assert Commit.parse("feat: x").scope is None
+
+
 def test_release_notes_empty() -> None:
     assert release_notes([]) == ""

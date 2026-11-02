@@ -42,6 +42,10 @@ SECTION_TITLES = {
 }
 OTHER_SECTION = "Other Changes"
 
+# Repository bookkeeping that is not useful in release notes.
+HOUSEKEEPING_SCOPES = {"release"}
+HOUSEKEEPING_SUBJECTS = re.compile(r"^(Merge |update future updates history|sync main into dev)")
+
 
 class Bump(IntEnum):
     NONE = 0
@@ -55,6 +59,7 @@ class Commit:
     type: str
     subject: str
     breaking: bool
+    scope: str | None = None
 
     @classmethod
     def parse(cls, message: str) -> Commit:
@@ -69,7 +74,12 @@ class Commit:
             type=match["type"],
             subject=match["subject"],
             breaking=breaking or bool(match["breaking"]),
+            scope=match["scope"],
         )
+
+    @property
+    def is_housekeeping(self) -> bool:
+        return self.scope in HOUSEKEEPING_SCOPES or bool(HOUSEKEEPING_SUBJECTS.match(self.subject))
 
     @property
     def bump(self) -> Bump:
@@ -107,7 +117,7 @@ def next_version(previous: str | None, commits: Sequence[Commit]) -> str | None:
 def release_notes(commits: Sequence[Commit]) -> str:
     sections: dict[str, list[str]] = {}
     for commit in commits:
-        if commit.type == "other" and commit.subject.startswith("Merge "):
+        if commit.is_housekeeping and not commit.breaking:
             continue
         key = "breaking" if commit.breaking else commit.type
         title = SECTION_TITLES.get(key, OTHER_SECTION)
