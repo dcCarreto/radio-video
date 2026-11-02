@@ -51,6 +51,7 @@ fallback_version = "0.0.0"
 testpaths = ["tests"]
 pythonpath = ["scripts"]
 addopts = ["-ra", "--strict-markers", "--import-mode=importlib"]
+faulthandler_timeout = 120
 markers = [
     "ffmpeg: requires FFmpeg and FFprobe to be installed",
 ]
