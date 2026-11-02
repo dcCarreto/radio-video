@@ -162,6 +162,13 @@ A cumulative history of changes merged into `dev`, newest first.
 
 ### 2026-11-02
 
+- **#11 feat: add preview player with short and full previews**: previews converted with the
+  selected settings, either a 15-second sample or the whole file, played in a playback-only
+  player and deleted when closed. A short preview also measures the output size for
+  quality-based formats.
+- **#12 fix: use a Windows Job Object to stop FFmpeg and its children**: canceling immediately
+  after a conversion starts no longer leaves FFmpeg running when it is installed as a
+  package-manager shim, and FFmpeg can no longer outlive the application.
 - **#9 feat: add simple conversion mode**: Convert panel in the main window with output formats
   (MP4, MKV, WebM, MP3, AAC, Opus, Vorbis, FLAC, WAV), quality presets, destination folder,
   output summary, size estimate where predictable, progress, cancel and Show in Folder. Formats are
