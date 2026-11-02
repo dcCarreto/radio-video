@@ -9,6 +9,7 @@ from PySide6.QtWidgets import QApplication
 from radio_video import APP_NAME, __version__
 from radio_video.ffmpeg.capabilities import CapabilityError, list_encoders
 from radio_video.ffmpeg.locator import FFmpegNotFoundError, FFmpegTools, locate_tools
+from radio_video.services.preview import purge_stale_previews
 from radio_video.ui.main_window import MainWindow
 
 logger = logging.getLogger(__name__)
@@ -38,6 +39,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         logger.error(tools_error)
     except CapabilityError as exc:
         logger.error(str(exc))
+
+    if removed := purge_stale_previews():
+        logger.info("Removed %d stale preview folders", removed)
 
     window = MainWindow(tools, tools_error, encoders)
     window.show()

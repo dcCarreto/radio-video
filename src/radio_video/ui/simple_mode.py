@@ -27,6 +27,8 @@ from radio_video.models.estimate import describe_settings, estimate_output_size
 from radio_video.models.media import MediaInfo
 from radio_video.models.presets import OutputFormat, Quality, available_formats
 from radio_video.services.conversion import ConversionError, ConversionRunner
+from radio_video.services.preview import SHORT_PREVIEW_SECONDS, PreviewKind
+from radio_video.ui.preview_dialog import PreviewDialog
 from radio_video.utils.formatting import format_duration, format_size
 from radio_video.utils.paths import unique_output_path
 
@@ -53,6 +55,8 @@ class SimpleModePanel(QGroupBox):
         self._folder: Path | None = None
         self._chosen_folder: Path | None = None
         self._last_output: Path | None = None
+        self._preview_estimate: tuple[Path, str, Quality, int] | None = None
+        self.preview_dialog: PreviewDialog | None = None
 
         self.format_combo = QComboBox()
         self.quality_combo = QComboBox()
@@ -71,6 +75,7 @@ class SimpleModePanel(QGroupBox):
         self.details_label = QLabel()
         self.details_label.setWordWrap(True)
         self.size_label = QLabel()
+        self.size_label.setWordWrap(True)
 
         form = QFormLayout()
         form.addRow("Format:", self.format_combo)
@@ -89,9 +94,19 @@ class SimpleModePanel(QGroupBox):
         self.cancel_button = QPushButton("Cancel")
         self.show_button = QPushButton("Show in Folder")
         self.show_button.hide()
+        self.short_preview_button = QPushButton(f"Preview {SHORT_PREVIEW_SECONDS:g} s")
+        self.short_preview_button.setToolTip(
+            f"Convert a {SHORT_PREVIEW_SECONDS:g}-second sample with these settings and play it"
+        )
+        self.full_preview_button = QPushButton("Full Preview")
+        self.full_preview_button.setToolTip(
+            "Convert the whole file to a temporary preview with these settings and play it"
+        )
 
         buttons = QHBoxLayout()
         buttons.addWidget(self.status_label, stretch=1)
+        buttons.addWidget(self.short_preview_button)
+        buttons.addWidget(self.full_preview_button)
         buttons.addWidget(self.show_button)
         buttons.addWidget(self.cancel_button)
         buttons.addWidget(self.convert_button)
@@ -107,6 +122,8 @@ class SimpleModePanel(QGroupBox):
         self.convert_button.clicked.connect(self.start_conversion)
         self.cancel_button.clicked.connect(self._runner.cancel)
         self.show_button.clicked.connect(self._show_output)
+        self.short_preview_button.clicked.connect(lambda: self.open_preview(PreviewKind.SHORT))
+        self.full_preview_button.clicked.connect(lambda: self.open_preview(PreviewKind.FULL))
 
         runner.started.connect(self._on_started)
         runner.progress.connect(self._on_progress)
@@ -180,11 +197,48 @@ class SimpleModePanel(QGroupBox):
         self.output_label.setToolTip(str(output))
         self.details_label.setText(describe_settings(settings, media))
         size = estimate_output_size(settings, media)
+        measured = self._matching_preview_estimate()
         if size is not None:
             self.size_label.setText(f"≈ {format_size(size)}")
+        elif measured is not None:
+            self.size_label.setText(f"≈ {format_size(measured)} (measured from a preview)")
         else:
-            self.size_label.setText("Depends on the content (quality-based encoding)")
+            self.size_label.setText(
+                "Depends on the content (quality-based encoding). Create a preview to measure it."
+            )
         self.convert_button.setEnabled(not self.running)
+        self.short_preview_button.setEnabled(not self.running)
+        self.full_preview_button.setEnabled(not self.running)
+
+    def _matching_preview_estimate(self) -> int | None:
+        fmt = self.selected_format
+        if self._preview_estimate is None or self._media is None or fmt is None:
+            return None
+        path, key, quality, size = self._preview_estimate
+        if (path, key, quality) != (self._media.path, fmt.key, self.selected_quality):
+            return None
+        return size
+
+    def open_preview(self, kind: PreviewKind) -> PreviewDialog | None:
+        fmt = self.selected_format
+        media = self._media
+        if fmt is None or media is None or self.running:
+            return None
+        quality = self.selected_quality
+        dialog = PreviewDialog(self._runner.ffmpeg, media, fmt, quality, kind, self)
+        dialog.setModal(True)
+        dialog.size_estimated.connect(
+            lambda size: self._store_preview_estimate(media.path, fmt.key, quality, size)
+        )
+        dialog.finished.connect(dialog.deleteLater)
+        self.preview_dialog = dialog
+        dialog.show()
+        dialog.start()
+        return dialog
+
+    def _store_preview_estimate(self, path: Path, key: str, quality: Quality, size: int) -> None:
+        self._preview_estimate = (path, key, quality, size)
+        self._update_summary()
 
     @property
     def running(self) -> bool:
@@ -224,6 +278,8 @@ class SimpleModePanel(QGroupBox):
             not running and self.selected_format is not None and not self.selected_format.lossless
         )
         self.convert_button.setEnabled(not running and self.selected_format is not None)
+        for button in (self.short_preview_button, self.full_preview_button):
+            button.setEnabled(not running and self.selected_format is not None)
         self.cancel_button.setVisible(running)
         self.busy_changed.emit(running)
 
