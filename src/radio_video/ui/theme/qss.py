@@ -109,11 +109,6 @@ QTableView::item {{ border-bottom: 1px solid {c["border"]}; padding: 0 10px; }}
 QTableView::item:hover {{ background: {c["hover"]}; }}
 QTableView::item:selected {{ background: {c["accent_tint"]}; color: {c["text"]}; }}
 QHeaderView {{ background: transparent; border: none; }}
-QHeaderView::section {{
-    background: {c["bg"]}; color: {c["text_2"]};
-    border: none; border-bottom: 2px solid {c["rule"]}; padding: 8px 10px;
-}}
-QTableView[onSurface="true"] QHeaderView::section {{ background: {c["surface"]}; }}
 QTableCornerButton::section {{ background: transparent; border: none; }}
 
 QComboBox QAbstractItemView {{
