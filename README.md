@@ -155,6 +155,11 @@ A cumulative history of changes merged into `dev`, newest first.
 
 ### 2026-11-02
 
+- **#9 feat: add simple conversion mode**: Convert panel in the main window with output formats
+  (MP4, MKV, WebM, MP3, AAC, Opus, Vorbis, FLAC, WAV), quality presets, destination folder,
+  output summary, size estimate where predictable, progress, cancel and Show in Folder. Formats are
+  offered according to the encoders in the installed FFmpeg, and existing files are never
+  overwritten.
 - **#7 feat: add conversion engine with progress and cancellation**: validated conversion
   settings, FFmpeg command construction, progress parsing and an asynchronous runner. Output is
   written to a temporary file and moved into place only on success; cancel terminates the whole
