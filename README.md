@@ -119,6 +119,13 @@ The branch model, commit conventions and pull request process are described in
 
 A cumulative history of changes merged into `dev`, newest first.
 
+### 2026-11-02
+
+- **#1 chore: set up project structure, tooling and CI**: Python packaging with Git-tag
+  versioning, Ruff, mypy and pytest configuration, CI checks on pull requests (branch policy,
+  lint, Windows tests with FFmpeg, dependency audit, package build), automated semantic-version
+  releases on `main`, and the README, development guide and third-party license documentation.
+
 ## License
 
 Radio/Video is released under the [MIT License](LICENSE).
