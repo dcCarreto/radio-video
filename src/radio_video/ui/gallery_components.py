@@ -7,12 +7,13 @@ from PySide6.QtWidgets import QGridLayout, QHBoxLayout, QVBoxLayout, QWidget
 
 from radio_video.ui import strings as s
 from radio_video.ui.icons import IconName
+from radio_video.ui.pages.start_view import make_drop_zone
 from radio_video.ui.strings import tr
 from radio_video.ui.theme.fonts import TextStyle
 from radio_video.ui.widgets.badge import Badge, BadgeTone
 from radio_video.ui.widgets.button import Button, ButtonKind, ButtonSize, Expander
 from radio_video.ui.widgets.checks import CheckBox, LabeledCheck, RadioButton, Switch
-from radio_video.ui.widgets.drop_zone import DropRefusal, DropState, DropZone
+from radio_video.ui.widgets.drop_zone import DropState
 from radio_video.ui.widgets.facts_grid import FactsGrid
 from radio_video.ui.widgets.format_combo import FormatCombo, FormatGroup, FormatOption
 from radio_video.ui.widgets.frames import CodeBlock, FieldBox, Note, PlannedBanner
@@ -97,27 +98,6 @@ def quality_options() -> list[SegmentOption]:
             "small", tr(s.QUALITY_SMALL), tr(s.QUALITY_SMALL_SUB), tr(s.QUALITY_SMALL_HELP)
         ),
     ]
-
-
-def make_drop_zone() -> DropZone:
-    refusals = {
-        DropRefusal.SEVERAL_FILES: s.DROP_BLOCKED_SEVERAL,
-        DropRefusal.FOLDER: s.DROP_BLOCKED_SEVERAL,
-        DropRefusal.BUSY: s.DROP_BLOCKED_CONVERTING,
-    }
-    return DropZone(
-        titles={
-            DropState.IDLE: tr(s.DROP_IDLE_TITLE),
-            DropState.OVER: tr(s.DROP_OVER_TITLE),
-            DropState.BLOCKED: tr(s.DROP_BLOCKED_TITLE),
-        },
-        idle_hint=tr(s.DROP_IDLE_HINT),
-        idle_help=tr(s.DROP_IDLE_HELP),
-        over_text=tr(s.DROP_OVER_TEXT),
-        open_text=tr(s.ACTION_OPEN),
-        open_shortcut=tr(s.SHORTCUT_OPEN),
-        refusal_text=lambda refusal: tr(refusals[refusal]),
-    )
 
 
 def _spec(title: str, *widgets: QWidget) -> QWidget:

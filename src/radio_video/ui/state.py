@@ -227,7 +227,9 @@ class StateMachine:
     def analysis_failed(self) -> bool:
         return self._set(analyzing=False)
 
-    def file_opened(self, path: Path, *, lossless: bool | None = None) -> bool:
+    def file_opened(
+        self, path: Path, *, format_key: str | None = None, lossless: bool | None = None
+    ) -> bool:
         if self._state.converting:
             return False
         return self._set(
@@ -243,6 +245,7 @@ class StateMachine:
             dialog=None,
             preview=None,
             measured={},
+            format_key=format_key or self._state.format_key,
             lossless=self._state.lossless if lossless is None else lossless,
         )
 

@@ -56,5 +56,7 @@ def test_type_scale() -> None:
     assert kicker.capitalization() is kicker.Capitalization.AllUppercase
     assert fonts.font(TextStyle.DISPLAY).families()[0] == "Segoe UI Variable Display"
     assert fonts.font(TextStyle.BODY).families()[0] == "Segoe UI Variable Text"
+    assert fonts.font(TextStyle.BODY_STRONG).families()[0] == "Segoe UI Variable Text Semibold"
+    assert fonts.font(TextStyle.TITLE).families()[0] == "Segoe UI Variable Display Semibold"
     assert fonts.font(TextStyle.MONO).families()[0] == "Cascadia Mono"
     assert fonts.line_height(TextStyle.TITLE) == 28

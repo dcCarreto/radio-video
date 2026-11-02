@@ -26,18 +26,21 @@ from radio_video.ui.theme.fonts import TextStyle
 from radio_video.ui.widgets.button import Button, ButtonKind, ButtonSize
 from radio_video.ui.widgets.labels import label
 from radio_video.ui.widgets.painting import antialiased, fill_rounded, follow_theme
+from radio_video.ui.widgets.progress import ProgressBar
 
 
 class DropState(Enum):
     IDLE = "idle"
     OVER = "over"
     BLOCKED = "blocked"
+    READING = "reading"
 
 
 ICONS: dict[DropState, IconName] = {
     DropState.IDLE: "Upload",
     DropState.OVER: "ArrowDownToLine",
     DropState.BLOCKED: "Ban",
+    DropState.READING: "Upload",
 }
 
 
@@ -78,6 +81,7 @@ class _IconTile(QWidget):
             DropState.IDLE: (p.sunken, p.text),
             DropState.OVER: (p.accent, p.on_accent),
             DropState.BLOCKED: (p.raised, p.danger),
+            DropState.READING: (p.sunken, p.text),
         }[self.state]
         fill_rounded(painter, QRectF(self.rect()), 6, fill)
         icons.paint_icon(painter, QRectF(14, 14, 28, 28), ICONS[self.state], color)
@@ -97,6 +101,7 @@ class DropZone(QFrame):
         idle_hint: str,
         idle_help: str,
         over_text: str,
+        reading_text: str,
         open_text: str,
         open_shortcut: str,
         refusal_text: Callable[[DropRefusal], str],
@@ -137,8 +142,16 @@ class DropZone(QFrame):
 
         self.over_text = label(over_text, tone="secondary", wrap=True)
         self.blocked_text = label("", tone="secondary", wrap=True)
+        reading = QWidget()
+        reading_layout = QVBoxLayout(reading)
+        reading_layout.setContentsMargins(0, 0, 0, 0)
+        reading_layout.setSpacing(12)
+        reading_layout.addWidget(label(reading_text, tone="secondary", wrap=True))
+        self.reading_bar = ProgressBar()
+        self.reading_bar.set_indeterminate(True)
+        reading_layout.addWidget(self.reading_bar)
         self.details = QStackedWidget()
-        for page in (idle, self.over_text, self.blocked_text):
+        for page in (idle, self.over_text, self.blocked_text, reading):
             self.details.addWidget(page)
         self.details.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
 
@@ -207,5 +220,6 @@ class DropZone(QFrame):
             DropState.IDLE: (p.surface, p.border_ctl, True),
             DropState.OVER: (p.accent_tint, p.accent, False),
             DropState.BLOCKED: (p.danger_tint, p.danger, True),
+            DropState.READING: (p.surface, p.border_ctl, True),
         }[self._state]
         fill_rounded(painter, QRectF(self.rect()), 6, fill, border, 2, dashed=dashed)

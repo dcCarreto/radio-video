@@ -47,7 +47,12 @@ def make_font(
         font.setFamilies(MONO_FAMILIES)
         font.setStyleHint(QFont.StyleHint.Monospace)
     else:
-        font.setFamilies(DISPLAY_FAMILIES if size >= DISPLAY_FROM_PX else TEXT_FAMILIES)
+        families = DISPLAY_FAMILIES if size >= DISPLAY_FROM_PX else TEXT_FAMILIES
+        if weight == QFont.Weight.DemiBold:
+            # Segoe UI Variable exposes only Regular and Bold per family; its semibold
+            # instance is a family of its own, so weight 600 would otherwise render bold.
+            families = [f"{families[0]} Semibold", *families[1:]]
+        font.setFamilies(families)
     font.setPixelSize(size)
     font.setWeight(weight)
     font.setHintingPreference(QFont.HintingPreference.PreferNoHinting)
