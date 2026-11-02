@@ -1,0 +1,86 @@
+[build-system]
+requires = ["setuptools>=77", "setuptools-scm>=8"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "radio-video"
+description = "Free and open-source desktop converter for audio and video files."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE", "THIRD-PARTY-LICENSES.md"]
+requires-python = ">=3.11"
+dynamic = ["version"]
+dependencies = [
+    "PySide6>=6.8,<7",
+]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Environment :: Win32 (MS Windows)",
+    "Environment :: X11 Applications :: Qt",
+    "Intended Audience :: End Users/Desktop",
+    "Operating System :: Microsoft :: Windows",
+    "Programming Language :: Python :: 3",
+    "Topic :: Multimedia :: Sound/Audio :: Conversion",
+    "Topic :: Multimedia :: Video :: Conversion",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8",
+    "pytest-qt>=4.4",
+    "ruff>=0.8",
+    "mypy>=1.13",
+    "build>=1.2",
+]
+
+[project.urls]
+Repository = "https://github.com/dcCarreto/radio-video"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools_scm]
+version_file = "src/radio_video/_version.py"
+fallback_version = "0.0.0"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["scripts"]
+addopts = ["-ra", "--strict-markers", "--import-mode=importlib"]
+markers = [
+    "ffmpeg: requires FFmpeg and FFprobe to be installed",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "scripts", "tests"]
+extend-exclude = ["src/radio_video/_version.py"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "SIM", "PTH", "RUF", "S"]
+ignore = ["S603"]
+allowed-confusables = ["×"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["radio_video", "next_version"]
+
+[tool.ruff.lint.per-file-ignores]
+"scripts/**" = ["S607"]
+"tests/**" = ["S101"]
+
+[tool.mypy]
+python_version = "3.11"
+files = ["src", "scripts", "tests"]
+mypy_path = "scripts"
+disallow_untyped_defs = true
+check_untyped_defs = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_return_any = true
+strict_equality = true
+
+[[tool.mypy.overrides]]
+module = ["radio_video._version"]
+ignore_missing_imports = true

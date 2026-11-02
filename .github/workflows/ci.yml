@@ -1,0 +1,121 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [dev, main]
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
+env:
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+  QT_QPA_PLATFORM: offscreen
+
+jobs:
+  branch-policy:
+    name: Branch policy
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate source and target branches
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          if [ "$BASE_REF" = "main" ]; then
+            if [ "$HEAD_REF" != "dev" ]; then
+              echo "::error::Pull requests into main must come from dev (got '$HEAD_REF')."
+              exit 1
+            fi
+            exit 0
+          fi
+          pattern='^((feature|fix|refactor|test|docs|chore|perf)/[a-z0-9]+(-[a-z0-9]+)*|dependabot/.+)$'
+          if ! [[ "$HEAD_REF" =~ $pattern ]]; then
+            echo "::error::Branch '$HEAD_REF' does not follow the naming convention (type/kebab-case-name)."
+            exit 1
+          fi
+
+  lint:
+    name: Lint and type check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - name: Install dependencies
+        run: python -m pip install -e ".[dev]"
+      - name: Ruff lint
+        run: ruff check .
+      - name: Ruff format
+        run: ruff format --check .
+      - name: Mypy
+        run: mypy
+
+  test:
+    name: Test (Python ${{ matrix.python-version }})
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.14"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+      - name: Install FFmpeg
+        run: choco install ffmpeg --yes --no-progress
+      - name: Install dependencies
+        run: python -m pip install -e ".[dev]"
+      - name: Verify FFmpeg
+        run: |
+          ffmpeg -hide_banner -version
+          ffprobe -hide_banner -version
+      - name: Run tests
+        env:
+          RADIO_VIDEO_REQUIRE_FFMPEG: "1"
+        run: pytest
+
+  dependencies:
+    name: Dependency check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - name: Install package
+        run: python -m pip install . pip-audit
+      - name: Check installed dependencies are consistent
+        run: python -m pip check
+      - name: Audit dependencies for known vulnerabilities
+        run: pip-audit --skip-editable
+
+  build:
+    name: Build package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - name: Build sdist and wheel
+        run: |
+          python -m pip install build
+          python -m build
+      - name: Verify wheel installs
+        run: |
+          python -m pip install dist/*.whl
+          python -c "import radio_video; print(radio_video.__version__)"
