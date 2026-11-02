@@ -38,6 +38,17 @@ FFmpeg-based media backend together with shared FFmpeg libraries (`avcodec`, `av
 `avutil`, `swresample`, `swscale`) built by The Qt Company under the LGPL. These libraries are
 covered by the same LGPL obligations as Qt itself.
 
+### Lucide icons
+
+| | |
+|---|---|
+| Project | [Lucide](https://lucide.dev/) 0.460.0 (`lucide-static`) |
+| License | ISC License; portions from Feather under the MIT License |
+| How it is used | SVG files bundled in `src/radio_video/ui/icons/lucide/`, recoloured at runtime |
+
+Only the icons the interface uses are bundled. The ISC license text ships next to them in
+`src/radio_video/ui/icons/lucide/LICENSE` and must accompany any redistribution.
+
 ## External Tools
 
 ### FFmpeg and FFprobe
