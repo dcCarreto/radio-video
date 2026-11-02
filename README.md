@@ -144,6 +144,10 @@ A cumulative history of changes merged into `dev`, newest first.
 
 ### 2026-11-02
 
+- **#5 feat: add main window with media information view**: first runnable version of the
+  application. Files can be opened from the menu, a button or by drag and drop; FFprobe runs in the
+  background and the window shows the container summary and every stream. Adds the `radio-video`
+  entry point.
 - **#3 feat: add FFprobe media analysis**: locates FFmpeg and FFprobe (environment variables,
   bundled directories, `PATH`) and reads container and stream metadata into typed models, with
   clear errors for missing, unreadable or non-media files.
