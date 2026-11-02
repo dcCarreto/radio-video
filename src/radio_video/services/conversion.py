@@ -18,7 +18,7 @@ from PySide6.QtCore import (
 
 from radio_video.errors import RadioVideoError
 from radio_video.ffmpeg.command import build_conversion_command
-from radio_video.ffmpeg.process import kill_process_tree
+from radio_video.ffmpeg.process import ProcessGroup
 from radio_video.ffmpeg.progress import ProgressParser, ProgressUpdate
 from radio_video.models.conversion import ConversionJob
 
@@ -61,6 +61,7 @@ class ConversionRunner(QObject):
         self._stderr: deque[str] = deque(maxlen=STDERR_TAIL_LINES)
         self._cancel_requested = False
         self._finalizing = False
+        self._group = ProcessGroup()
 
     @property
     def is_running(self) -> bool:
@@ -99,6 +100,8 @@ class ConversionRunner(QObject):
         process.errorOccurred.connect(self._on_error)
         self._process = process
         process.start()
+        self._group = ProcessGroup()
+        self._group.attach(process.processId())
         self.started.emit(job)
 
     def cancel(self) -> None:
@@ -106,7 +109,7 @@ class ConversionRunner(QObject):
             return
         logger.info("Canceling conversion of %s", self._job.source if self._job else "?")
         self._cancel_requested = True
-        kill_process_tree(self._process.processId())
+        self._group.terminate()
         self._process.kill()
 
     def wait(self, msecs: int = 30000) -> bool:
@@ -202,6 +205,7 @@ class ConversionRunner(QObject):
         then()
 
     def _reset(self) -> None:
+        self._group.close()
         if self._process is not None:
             self._process.deleteLater()
         self._process = None
