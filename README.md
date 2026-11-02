@@ -144,6 +144,10 @@ A cumulative history of changes merged into `dev`, newest first.
 
 ### 2026-11-02
 
+- **#7 feat: add conversion engine with progress and cancellation**: validated conversion
+  settings, FFmpeg command construction, progress parsing and an asynchronous runner. Output is
+  written to a temporary file and moved into place only on success; cancel terminates the whole
+  FFmpeg process tree, including package-manager shims, and removes partial output.
 - **#5 feat: add main window with media information view**: first runnable version of the
   application. Files can be opened from the menu, a button or by drag and drop; FFprobe runs in the
   background and the window shows the container summary and every stream. Adds the `radio-video`
