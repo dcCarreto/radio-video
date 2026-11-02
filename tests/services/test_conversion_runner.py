@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import os
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -91,6 +93,41 @@ def test_converts_time_range(
         runner.start(ConversionJob(sample_video, destination, MP4, start=1.0, length=1.0))
     info = probe(destination, ffmpeg_tools.ffprobe)
     assert info.duration == pytest.approx(1.0, abs=0.2)
+
+
+def _ffmpeg_processes() -> set[int]:
+    tasklist = Path(os.environ.get("SYSTEMROOT", r"C:\Windows")) / "System32" / "tasklist.exe"
+    result = subprocess.run(
+        [str(tasklist), "/FI", "IMAGENAME eq ffmpeg.exe", "/NH", "/FO", "CSV"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return {int(line.split('","')[1]) for line in result.stdout.splitlines() if '","' in line}
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows process shims")
+def test_immediate_cancel_through_shim_leaves_no_ffmpeg_running(
+    qtbot: QtBot, ffmpeg_tools: FFmpegTools, long_video: Path, tmp_path: Path
+) -> None:
+    shim = tmp_path / "ffmpeg-shim.cmd"
+    shim.write_text(f'@"{ffmpeg_tools.ffmpeg}" %*\n', encoding="utf-8")
+    before = _ffmpeg_processes()
+    slow = ConversionSettings(
+        video=VideoOptions(codec="libx264", preset="veryslow", width=1920, height=1440),
+        audio=None,
+    )
+    runner = ConversionRunner(shim)
+    destination = tmp_path / "out" / "shim.mp4"
+    destination.parent.mkdir()
+    runner.start(ConversionJob(long_video, destination, slow, duration=120.0))
+
+    with qtbot.waitSignal(runner.canceled, timeout=TIMEOUT_MS):
+        runner.cancel()
+
+    qtbot.wait(1500)
+    assert _ffmpeg_processes() - before == set()
+    assert not any(destination.parent.iterdir())
 
 
 def test_cancel_removes_partial_output(
