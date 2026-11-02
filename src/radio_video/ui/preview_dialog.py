@@ -92,7 +92,13 @@ class PreviewDialog(QDialog):
 
     def start(self) -> bool:
         try:
-            self.generator.generate(self._media, self._settings, self._format.extension, self._kind)
+            self.generator.generate(
+                self._media,
+                self._settings,
+                self._format.extension,
+                self._kind,
+                self._format.plan(self._media),
+            )
         except (ConversionError, ValueError, OSError) as exc:
             self.status_label.setText(f"Could not create the preview: {exc}")
             self.cancel_button.hide()

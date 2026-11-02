@@ -4,6 +4,8 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
+from radio_video.models.tracks import StreamMap
+
 COPY = "copy"
 
 _NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
@@ -71,17 +73,23 @@ class VideoOptions:
 
 @dataclass(frozen=True)
 class AudioOptions:
+    """Audio encoding options. ``quality`` is the encoder's variable-bitrate scale (``-q:a``)."""
+
     codec: str
     bitrate: int | None = None
     sample_rate: int | None = None
     channels: int | None = None
+    quality: float | None = None
 
     def __post_init__(self) -> None:
         _check_name("audio codec", self.codec)
         for name in ("bitrate", "sample_rate", "channels"):
             _check_positive(name, getattr(self, name))
+        if self.bitrate is not None and self.quality is not None:
+            raise ValueError("Use either a bitrate or a quality level, not both")
         if self.is_copy and any(
-            value is not None for value in (self.bitrate, self.sample_rate, self.channels)
+            value is not None
+            for value in (self.bitrate, self.sample_rate, self.channels, self.quality)
         ):
             raise ValueError("Encoding options cannot be combined with stream copy")
 
@@ -112,6 +120,8 @@ class ConversionJob:
     start: float | None = None
     length: float | None = None
     overwrite: bool = False
+    # Tracks to map. None keeps the first video and audio stream.
+    streams: StreamMap | None = None
 
     def __post_init__(self) -> None:
         if self.source.resolve() == self.destination.resolve():

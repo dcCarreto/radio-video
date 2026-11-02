@@ -13,6 +13,7 @@ from PySide6.QtCore import QObject, Signal, Slot
 from radio_video.ffmpeg.progress import ProgressUpdate
 from radio_video.models.conversion import ConversionJob, ConversionSettings
 from radio_video.models.media import MediaInfo
+from radio_video.models.tracks import StreamMap
 from radio_video.services.conversion import ConversionRunner
 
 logger = logging.getLogger(__name__)
@@ -112,6 +113,7 @@ class PreviewGenerator(QObject):
         settings: ConversionSettings,
         extension: str,
         kind: PreviewKind,
+        streams: StreamMap | None = None,
     ) -> None:
         self.discard()
         self._temp_dir = Path(tempfile.mkdtemp(prefix=TEMP_PREFIX))
@@ -128,6 +130,7 @@ class PreviewGenerator(QObject):
             start=self._start or None,
             length=self._length,
             overwrite=True,
+            streams=streams,
         )
         self.runner.start(job)
         self.started.emit(kind)
