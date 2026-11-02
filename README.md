@@ -31,11 +31,16 @@ full control over encoding parameters.
 - Main window: open a file from the menu, the Open button or by drag and drop, and view its media
   information. Analysis runs in the background so the window stays responsive. When FFmpeg is
   missing, the window explains how to install it.
+- Conversion engine: runs FFmpeg asynchronously with progress (percentage, speed, time remaining)
+  and cancellation. Output is written to a temporary file and moved into place only on success, so
+  failed or canceled conversions leave nothing behind. Supports video and audio codec settings,
+  resolution, frame rate, pixel format, audio bitrate, sample rate and channels, stream copy, audio
+  extraction, time ranges and metadata preservation. Not yet available in the user interface.
 
 ## Planned Features
 
-- Conversion engine with progress reporting and cancellation.
-- Simple Mode: output format, quality preset, destination folder, estimated output.
+- Simple Mode: output format, quality preset, destination folder, estimated output, conversion
+  progress and cancellation in the main window.
 - Advanced Mode: video and audio codecs, bitrate, CRF, resolution, aspect ratio, frame rate,
   pixel format, sample rate, channels, filters, track selection and container options.
 - Preview player with short (10–20 s) and full previews generated from the real settings.
