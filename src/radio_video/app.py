@@ -27,6 +27,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     app.setApplicationVersion(__version__)
     app.setOrganizationName("Radio-Video")
 
+    if "--ui-gallery" in args:
+        from radio_video.ui import gallery
+
+        return gallery.run(app, args)
+
     tools: FFmpegTools | None = None
     tools_error: str | None = None
     encoders: frozenset[str] = frozenset()
