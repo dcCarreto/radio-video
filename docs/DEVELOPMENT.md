@@ -77,8 +77,21 @@ the process cannot recurse.
    [`scripts/next_version.py`](../scripts/next_version.py), creates the tag and the GitHub release
    with release notes and build artifacts.
 
-The release workflow is idempotent: if the tag or release for the computed version already exists,
-it does nothing. Releases are never created manually.
+The release is published by [`scripts/publish_release.py`](../scripts/publish_release.py), which
+is idempotent and tolerates transient GitHub API failures:
+
+- If a published release for the tag already exists, it does nothing.
+- A leftover draft from an interrupted attempt is deleted and recreated.
+- Failed attempts are retried. Because the API can report an error after the release was in fact
+  published, the release state is checked after every failure.
+
+Re-running the workflow is therefore always safe. Releases are never created manually.
+
+After a release, open a pull request from a `chore/sync-main-into-dev` branch created from `main`
+and merge it into `dev` with a merge commit, so the new tag is reachable from `dev`.
+
+Release notes leave out repository bookkeeping: Future Updates history entries, `chore(release)`
+commits and main-to-dev syncs.
 
 ## FFmpeg Location
 

@@ -34,37 +34,25 @@ jobs:
         id: version
         run: python scripts/next_version.py --notes "$RUNNER_TEMP/notes.md"
 
-      - name: Skip when the version is already released
-        id: guard
-        if: steps.version.outputs.release == 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          TAG: ${{ steps.version.outputs.tag }}
-        run: |
-          if gh release view "$TAG" > /dev/null 2>&1 || git rev-parse -q --verify "refs/tags/$TAG" > /dev/null; then
-            echo "Release $TAG already exists; nothing to do."
-            echo "publish=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "publish=true" >> "$GITHUB_OUTPUT"
-          fi
-
       - name: Build distribution
-        if: steps.guard.outputs.publish == 'true'
+        if: steps.version.outputs.release == 'true'
         env:
           SETUPTOOLS_SCM_PRETEND_VERSION: ${{ steps.version.outputs.version }}
         run: |
           python -m pip install build
           python -m build
 
-      - name: Create GitHub release
-        if: steps.guard.outputs.publish == 'true'
+      - name: Publish GitHub release
+        if: steps.version.outputs.release == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.version.outputs.tag }}
           PREVIOUS_TAG: ${{ steps.version.outputs.previous_tag }}
-        run: |
-          args=(--target "$GITHUB_SHA" --title "Radio/Video $TAG" --notes-file "$RUNNER_TEMP/notes.md" --generate-notes)
-          if [ -n "$PREVIOUS_TAG" ]; then
-            args+=(--notes-start-tag "$PREVIOUS_TAG")
-          fi
-          gh release create "$TAG" "${args[@]}" dist/*
+        run: >-
+          python scripts/publish_release.py
+          --tag "$TAG"
+          --title "Radio/Video $TAG"
+          --target "$GITHUB_SHA"
+          --notes-file "$RUNNER_TEMP/notes.md"
+          --previous-tag "$PREVIOUS_TAG"
+          dist/*
