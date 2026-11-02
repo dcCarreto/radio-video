@@ -179,6 +179,11 @@ A cumulative history of changes merged into `dev`, newest first.
 
 ### 2026-11-02
 
+- **#26 feat(ui): add design system widgets**: the building blocks of the redesigned
+  interface, painted from the theme tokens: buttons with shortcut hints, badges, segmented
+  controls, tab and step strips, the drop zone with its one-file rules, the grouped format
+  picker, progress bars that announce progress every 10%, notes, the facts grid, the tracks
+  table, player controls, check boxes and switches.
 - **#24 feat(ui): add design tokens, theme manager, icons and UI gallery**: foundation of the
   redesigned interface: light and dark colour tokens checked for WCAG AA contrast, a theme that
   follows the Windows colour scheme, the type scale, bundled Lucide icons, a keyboard focus ring

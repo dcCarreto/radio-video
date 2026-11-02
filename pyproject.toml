@@ -65,7 +65,7 @@ extend-exclude = ["src/radio_video/_version.py"]
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "N", "UP", "B", "SIM", "PTH", "RUF", "S"]
 ignore = ["S603"]
-allowed-confusables = ["×"]
+allowed-confusables = ["×", "’", "“", "”", "–"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["radio_video", "next_version"]
