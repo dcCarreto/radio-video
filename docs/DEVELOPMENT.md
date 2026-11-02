@@ -79,3 +79,17 @@ the process cannot recurse.
 
 The release workflow is idempotent: if the tag or release for the computed version already exists,
 it does nothing. Releases are never created manually.
+
+## FFmpeg Location
+
+`radio_video.ffmpeg.locate_tools()` looks for FFmpeg in this order:
+
+1. The `RADIO_VIDEO_FFMPEG` and `RADIO_VIDEO_FFPROBE` environment variables. If set but invalid,
+   lookup fails instead of silently falling back.
+2. Directories passed explicitly by the caller (reserved for a bundled build).
+3. The system `PATH`.
+
+Tests that need FFmpeg use the `ffmpeg_tools`, `sample_video` and `sample_audio` fixtures from
+`tests/conftest.py`. Sample media is generated at test time with FFmpeg's `lavfi` sources, so no
+binary fixtures are stored in the repository. Locally these tests are skipped when FFmpeg is
+missing; CI sets `RADIO_VIDEO_REQUIRE_FFMPEG=1` to make them fail instead.

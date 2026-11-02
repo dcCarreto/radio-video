@@ -25,11 +25,14 @@ full control over encoding parameters.
 - Continuous integration: linting, type checking, tests on Windows, dependency audit and package
   build on every pull request.
 - Automated semantic versioning and GitHub releases when changes reach `main`.
+- FFmpeg and FFprobe discovery through environment variables or `PATH`.
+- Media analysis engine based on FFprobe: container, duration, size, bitrate, tags, and per-stream
+  codec, resolution, frame rate, pixel format, sample rate, channels, language and title. Not yet
+  available in the user interface.
 
 ## Planned Features
 
-- Media file analysis with FFprobe (streams, codecs, duration, bitrate, metadata).
-- Main window with drag-and-drop file selection.
+- Main window with drag-and-drop file selection and media information display.
 - Conversion engine with progress reporting and cancellation.
 - Simple Mode: output format, quality preset, destination folder, estimated output.
 - Advanced Mode: video and audio codecs, bitrate, CRF, resolution, aspect ratio, frame rate,
@@ -57,7 +60,8 @@ full control over encoding parameters.
 
 - Windows 10 or 11 (64-bit). Other platforms may work but are not tested yet.
 - Python 3.11 or newer (for running from source).
-- FFmpeg and FFprobe available on `PATH`.
+- FFmpeg and FFprobe available on `PATH`, or their full paths set in the `RADIO_VIDEO_FFMPEG`
+  and `RADIO_VIDEO_FFPROBE` environment variables.
 
 FFmpeg is not bundled. On Windows it can be installed with:
 
