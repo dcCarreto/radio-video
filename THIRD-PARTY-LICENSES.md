@@ -33,7 +33,7 @@ Visualization, Qt Virtual Keyboard) are not used. Any new Qt module must be chec
 
 ### Qt Multimedia FFmpeg backend
 
-The preview player is planned on Qt Multimedia. On Windows, the PySide6 wheels include Qt's
+The preview player uses Qt Multimedia (`QtMultimedia`, `QtMultimediaWidgets`, LGPLv3). On Windows, the PySide6 wheels include Qt's
 FFmpeg-based media backend together with shared FFmpeg libraries (`avcodec`, `avformat`,
 `avutil`, `swresample`, `swscale`) built by The Qt Company under the LGPL. These libraries are
 covered by the same LGPL obligations as Qt itself.

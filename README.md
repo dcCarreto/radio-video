@@ -47,12 +47,19 @@ full control over encoding parameters.
   - Progress with percentage, speed and remaining time; cancel; Show in Folder after success.
   - Opening other files is blocked while a conversion runs, and closing the window asks for
     confirmation.
+- Preview player:
+  - **Short preview** converts a 15-second sample, starting a third of the way into the file, with
+    the selected format and quality. Files of 15 seconds or less are converted entirely.
+  - **Full preview** converts the whole file to a temporary location.
+  - Previews are always the converted output, never the original file. They play in a
+    playback-only player (play/pause, seek, volume) and are deleted when the preview is closed.
+  - A short preview measures the real output size and extrapolates it to the full file, which
+    gives a size estimate for quality-based formats.
 
 ## Planned Features
 
 - Advanced Mode: video and audio codecs, bitrate, CRF, resolution, aspect ratio, frame rate,
   pixel format, sample rate, channels, filters, track selection and container options.
-- Preview player with short (10–20 s) and full previews generated from the real settings.
 - Batch conversion, conversion queue and conversion history.
 - Stream copy when re-encoding is not needed.
 - Hardware acceleration detection (NVENC, Quick Sync, AMF).

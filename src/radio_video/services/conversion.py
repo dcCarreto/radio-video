@@ -63,6 +63,10 @@ class ConversionRunner(QObject):
         self._finalizing = False
 
     @property
+    def ffmpeg(self) -> Path:
+        return self._ffmpeg
+
+    @property
     def is_running(self) -> bool:
         return self._process is not None
 
