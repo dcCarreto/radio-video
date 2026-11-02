@@ -192,6 +192,8 @@ class MainWindow(QMainWindow):
         # Replaceable so the UI gallery can show the design's demo states without files.
         self.output_namer: Callable[[Path, MediaInfo, OutputFormat], vm.OutputName] = vm.output_name
         self.folder_writable: Callable[[Path], bool] = _writable
+        # Previews start playing when ready; tests on machines without audio turn this off.
+        self.preview_autoplay = True
 
         self.setWindowTitle(tr(s.APP_NAME))
         self.setWindowIcon(icons.app_icon())
@@ -748,7 +750,11 @@ class MainWindow(QMainWindow):
             calculated_size=estimate_output_size(fmt.settings(state.quality), media),
         )
         window = PreviewWindow(
-            self.engine.tools.ffmpeg, request, compact=bool(self._compact), parent=self
+            self.engine.tools.ffmpeg,
+            request,
+            compact=bool(self._compact),
+            autoplay=self.preview_autoplay,
+            parent=self,
         )
         window.progress.connect(self.machine.preview_progress)
         window.ready.connect(self.machine.preview_ready)

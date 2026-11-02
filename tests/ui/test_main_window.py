@@ -252,6 +252,8 @@ def test_preview_measures_size(
     output = window.convert_page.file.panel.output
     assert output.estimate_value.text() == "Depends on the content"
 
+    # CI runners have no audio device; Qt Multimedia can hang stopping audio playback there.
+    window.preview_autoplay = False
     window.open_preview(PreviewKind.SAMPLE)
     preview = window.preview_window
     assert preview is not None
