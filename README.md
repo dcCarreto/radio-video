@@ -26,13 +26,14 @@ full control over encoding parameters.
   build on every pull request.
 - Automated semantic versioning and GitHub releases when changes reach `main`.
 - FFmpeg and FFprobe discovery through environment variables or `PATH`.
-- Media analysis engine based on FFprobe: container, duration, size, bitrate, tags, and per-stream
-  codec, resolution, frame rate, pixel format, sample rate, channels, language and title. Not yet
-  available in the user interface.
+- Media analysis with FFprobe: container, duration, size, bitrate, tags, and per-stream codec,
+  resolution, frame rate, pixel format, sample rate, channels, language and title.
+- Main window: open a file from the menu, the Open button or by drag and drop, and view its media
+  information. Analysis runs in the background so the window stays responsive. When FFmpeg is
+  missing, the window explains how to install it.
 
 ## Planned Features
 
-- Main window with drag-and-drop file selection and media information display.
 - Conversion engine with progress reporting and cancellation.
 - Simple Mode: output format, quality preset, destination folder, estimated output.
 - Advanced Mode: video and audio codecs, bitrate, CRF, resolution, aspect ratio, frame rate,
@@ -81,8 +82,15 @@ python -m pip install -e ".[dev]"
 
 ## Running the Application
 
-There is no runnable application yet. This section will be updated when the main window is
-implemented.
+From the activated virtual environment:
+
+```powershell
+radio-video            # installed entry point
+python -m radio_video  # equivalent
+```
+
+Pass `--debug` for verbose logging. The application can currently open and analyze media files;
+conversion is not available yet.
 
 ## Building
 
@@ -99,8 +107,14 @@ radio-video/
 ├── .github/                 CI, release workflow, Dependabot, PR template
 ├── docs/                    Development documentation
 ├── scripts/                 Release tooling
-├── src/radio_video/         Application package
-└── tests/                   Automated tests
+├── src/radio_video/
+│   ├── app.py               Application entry point
+│   ├── ffmpeg/              FFmpeg and FFprobe integration
+│   ├── models/              Data models
+│   ├── services/            Background work for the user interface
+│   ├── ui/                  Qt windows and widgets
+│   └── utils/               Shared helpers
+└── tests/                   Automated tests, mirroring the package layout
 ```
 
 ## Testing
