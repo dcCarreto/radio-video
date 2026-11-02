@@ -26,11 +26,15 @@ def test_accepts_real_encoder_names() -> None:
 
 @pytest.mark.parametrize(
     "kwargs",
-    [{"crf": 64}, {"crf": -1}, {"bitrate": 0}, {"width": -2}, {"frame_rate": 0}],
+    [{"crf": 64}, {"crf": -1}, {"bitrate": -1}, {"width": -2}, {"frame_rate": 0}],
 )
 def test_rejects_out_of_range_video_values(kwargs: dict[str, Any]) -> None:
     with pytest.raises(ValueError):
         VideoOptions(codec="libx264", **kwargs)
+
+
+def test_zero_video_bitrate_means_uncapped() -> None:
+    assert VideoOptions(codec="libvpx-vp9", crf=32, bitrate=0).bitrate == 0
 
 
 def test_stream_copy_rejects_encoding_options() -> None:

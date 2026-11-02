@@ -21,6 +21,12 @@ def _check_positive(name: str, value: float | None) -> None:
 
 @dataclass(frozen=True)
 class VideoOptions:
+    """Video encoding options.
+
+    ``bitrate=0`` removes the bitrate cap, which encoders such as libvpx-vp9 require for
+    constant-quality (CRF-only) encoding.
+    """
+
     codec: str
     crf: int | None = None
     bitrate: int | None = None
@@ -34,8 +40,10 @@ class VideoOptions:
         _check_name("video codec", self.codec)
         _check_name("preset", self.preset)
         _check_name("pixel format", self.pixel_format)
-        for name in ("bitrate", "width", "height", "frame_rate"):
+        for name in ("width", "height", "frame_rate"):
             _check_positive(name, getattr(self, name))
+        if self.bitrate is not None and self.bitrate < 0:
+            raise ValueError(f"bitrate must not be negative, got {self.bitrate}")
         if self.crf is not None and not 0 <= self.crf <= 63:
             raise ValueError(f"CRF must be between 0 and 63, got {self.crf}")
         if self.is_copy and self.has_encoding_options:
