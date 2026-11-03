@@ -48,6 +48,12 @@ def test_vp9_uses_constant_quality() -> None:
     assert "-crf" in args
 
 
+def test_vp9_uses_fast_multithreaded_encoding() -> None:
+    args = video_arguments(_format("webm-vp9").settings(Quality.BALANCED).video)
+    assert args[args.index("-cpu-used") + 1] == "4"
+    assert args[args.index("-row-mt") + 1] == "1"
+
+
 def test_available_formats_require_encoders() -> None:
     formats = available_formats({"aac", "libx264"}, source_has_video=True)
     assert [fmt.key for fmt in formats] == ["mp4-h264", "mkv-h264", "m4a-aac"]

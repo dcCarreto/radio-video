@@ -162,6 +162,17 @@ def test_mapped_tracks_with_cover_and_subtitles() -> None:
     assert "-sn" not in args and "-vn" not in args
 
 
+def test_mapped_encoder_speed_options_apply_to_the_main_video_only() -> None:
+    settings = ConversionSettings(
+        video=VideoOptions(codec="libvpx-vp9", crf=32, bitrate=0),
+        audio=AudioOptions(codec="libopus", bitrate=128_000),
+    )
+    args = mapped_arguments(settings, StreamMap(video=0, audio=(1,), cover_art=2))
+    assert _option(args, "-cpu-used:v:0") == "4"
+    assert _option(args, "-row-mt:v:0") == "1"
+    assert "-cpu-used" not in args
+
+
 def test_audio_only_mapping_puts_cover_first_and_downmixes() -> None:
     settings = ConversionSettings(video=None, audio=AudioOptions("libmp3lame", 192_000))
     args = mapped_arguments(settings, StreamMap(audio=(1,), cover_art=4, downmix_to_stereo=True))
