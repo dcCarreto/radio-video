@@ -11,6 +11,7 @@ from radio_video.ffmpeg.capabilities import CapabilityError, ffmpeg_version, lis
 from radio_video.ffmpeg.locator import FFmpegNotFoundError, FFmpegTools, locate_tools
 from radio_video.services.preview import purge_stale_previews
 from radio_video.ui import theme
+from radio_video.ui.native.shell import set_app_user_model_id
 from radio_video.ui.widgets.focus_ring import FocusRing
 from radio_video.ui.windows.main_window import Engine, MainWindow
 
@@ -24,6 +25,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
 
+    set_app_user_model_id()
     app = QApplication(args)
     app.setApplicationName(APP_NAME)
     app.setApplicationVersion(__version__)

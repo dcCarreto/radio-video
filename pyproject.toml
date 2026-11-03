@@ -33,6 +33,9 @@ dev = [
     "mypy>=1.13",
     "build>=1.2",
 ]
+installer = [
+    "pyinstaller>=6.11",
+]
 
 [project.gui-scripts]
 radio-video = "radio_video.app:main"

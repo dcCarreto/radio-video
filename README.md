@@ -112,14 +112,16 @@ control over encoding parameters is planned.
 
 - Windows 10 or 11 (64-bit). Other platforms may work but are not tested yet.
 - Python 3.11 or newer (for running from source).
-- FFmpeg and FFprobe available on `PATH`, or their full paths set in the `RADIO_VIDEO_FFMPEG`
-  and `RADIO_VIDEO_FFPROBE` environment variables.
-
-FFmpeg is not bundled. On Windows it can be installed with:
+- The installer includes FFmpeg. When running from source, FFmpeg and FFprobe must be on
+  `PATH`, or their full paths set in the `RADIO_VIDEO_FFMPEG` and `RADIO_VIDEO_FFPROBE`
+  environment variables. On Windows FFmpeg can be installed with:
 
 ```powershell
 winget install --id Gyan.FFmpeg -e
 ```
+
+FFmpeg is looked up in this order: the environment variables, the copy bundled with the
+installed application, then `PATH`.
 
 ## Development Setup
 
@@ -152,12 +154,36 @@ Open a file, choose a format, quality and destination folder in the **Convert** 
 python -m build
 ```
 
-This produces a source distribution and a wheel in `dist/`. A Windows installer is planned.
+This produces a source distribution and a wheel in `dist/`.
+
+### Windows installer
+
+The installer is built with [PyInstaller](https://pyinstaller.org/) and
+[Inno Setup 6](https://jrsoftware.org/isinfo.php) (`ISCC.exe` on `PATH`, in its default folder,
+or set in the `ISCC` environment variable):
+
+```powershell
+python -m pip install -e ".[installer]"
+python scripts/build_installer.py --version 1.2.3
+```
+
+The script freezes the application, adds the latest GPL build of FFmpeg 9.0 from
+[BtbN/FFmpeg-Builds](https://github.com/BtbN/FFmpeg-Builds) (verified against the SHA-256 digest
+GitHub publishes for it), downloads the corresponding FFmpeg source and build scripts, and writes
+`dist/Radio-Video-Setup-1.2.3.exe` together with the source archives. `--skip-installer` stops
+after freezing; `--skip-ffmpeg` leaves FFmpeg out. CI builds and smoke-tests the installer on
+every pull request.
 
 ## Installing a Release
 
-Each [GitHub release](https://github.com/dcCarreto/radio-video/releases) includes a wheel. With
-Python 3.11 or newer and FFmpeg installed:
+Each [GitHub release](https://github.com/dcCarreto/radio-video/releases) includes:
+
+- `Radio-Video-Setup-<version>.exe`: the Windows installer (64-bit Windows 10 or 11), with FFmpeg
+  included. It installs for the current user without administrator rights, or for all users,
+  and adds a Start menu shortcut and an uninstaller.
+- The FFmpeg source and build scripts that correspond to the bundled FFmpeg.
+- A wheel and a source distribution, for installing with pip (Python 3.11 or newer, FFmpeg
+  installed separately):
 
 ```powershell
 python -m pip install radio_video-<version>-py3-none-any.whl
