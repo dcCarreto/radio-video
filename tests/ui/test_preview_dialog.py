@@ -7,12 +7,9 @@ from PySide6.QtMultimedia import QMediaPlayer
 from pytestqt.qtbot import QtBot
 
 from radio_video.ffmpeg import FFmpegTools, probe
-from radio_video.ffmpeg.capabilities import list_encoders
 from radio_video.models.presets import OUTPUT_FORMATS, Quality
-from radio_video.services.conversion import ConversionRunner
 from radio_video.services.preview import PreviewKind
 from radio_video.ui.preview_dialog import PreviewDialog
-from radio_video.ui.simple_mode import SimpleModePanel
 
 pytestmark = pytest.mark.ffmpeg
 
@@ -53,23 +50,3 @@ def test_dialog_generates_and_plays_converted_preview(
 
     dialog.reject()
     assert not sample.path.parent.exists()
-
-
-def test_panel_uses_preview_measurement_for_size(
-    qtbot: QtBot, ffmpeg_tools: FFmpegTools, sample_video: Path
-) -> None:
-    encoders = list_encoders(ffmpeg_tools.ffmpeg)
-    panel = SimpleModePanel(ConversionRunner(ffmpeg_tools.ffmpeg), encoders)
-    qtbot.addWidget(panel)
-    panel.set_media(probe(sample_video, ffmpeg_tools.ffprobe))
-    assert "Depends on the content" in panel.size_label.text()
-
-    dialog = panel.open_preview(PreviewKind.SHORT)
-    assert dialog is not None
-    with qtbot.waitSignal(dialog.size_estimated, timeout=TIMEOUT_MS):
-        pass
-    assert "measured from a preview" in panel.size_label.text()
-
-    panel.quality_combo.setCurrentIndex(list(Quality).index(Quality.HIGH))
-    assert "Depends on the content" in panel.size_label.text()
-    dialog.reject()

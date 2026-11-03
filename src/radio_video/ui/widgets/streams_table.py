@@ -33,7 +33,7 @@ from radio_video.ui.theme.fonts import TextStyle
 from radio_video.ui.widgets.badge import BadgeTone, badge_size, paint_badge
 from radio_video.ui.widgets.painting import elide, text_width
 
-ROW_HEIGHT = 37
+ROW_HEIGHT = 40
 HEADER_HEIGHT = 34
 CELL_PADDING = 10
 

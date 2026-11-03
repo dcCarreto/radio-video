@@ -12,7 +12,7 @@ from radio_video.ui import icons, theme
 from radio_video.ui.icons import IconName
 from radio_video.ui.theme.fonts import TextStyle
 from radio_video.ui.theme.tokens import Palette
-from radio_video.ui.widgets.labels import ElidedLabel, label
+from radio_video.ui.widgets.labels import ElidedLabel
 from radio_video.ui.widgets.painting import antialiased, fill_rounded, follow_theme
 
 BAR_HEIGHT = 6
@@ -194,8 +194,9 @@ class ProgressBlock(QWidget):
         super().__init__(parent)
         self.spinner = Spinner(16)
         self.icon = StatusIcon(16)
-        self.title = label("", TextStyle.BODY_STRONG)
-        self.title.setTextFormat(Qt.TextFormat.PlainText)
+        # File names in the title elide in the middle so the size at the end stays visible.
+        self.title = ElidedLabel("", TextStyle.BODY_STRONG, mode=Qt.TextElideMode.ElideMiddle)
+        self.title.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
         self.detail = ElidedLabel("", TextStyle.BODY, tone="secondary")
         self.bar = ProgressBar()
 

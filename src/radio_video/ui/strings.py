@@ -486,3 +486,17 @@ ACTION_OPEN_ANOTHER = QT_TRANSLATE_NOOP("RadioVideo", "Open Another File…")
 ACTION_CHOOSE_FORMAT = QT_TRANSLATE_NOOP("RadioVideo", "Choose Another Format")
 ACTION_SOFTWARE = QT_TRANSLATE_NOOP("RadioVideo", "Convert with Software")
 ACTION_TRY_AGAIN = QT_TRANSLATE_NOOP("RadioVideo", "Try Again")
+
+# Planned screens
+PLANNED_QUEUE = QT_TRANSLATE_NOOP(
+    "RadioVideo", "The queue isn’t built yet. This shows how it will work."
+)
+PLANNED_HISTORY = QT_TRANSLATE_NOOP(
+    "RadioVideo", "History isn’t built yet. This shows how it will work."
+)
+PLANNED_SETTINGS = QT_TRANSLATE_NOOP(
+    "RadioVideo", "Settings aren’t built yet. This shows how they will work."
+)
+PLANNED_ADVANCED = QT_TRANSLATE_NOOP(
+    "RadioVideo", "Advanced Mode isn’t built yet. This shows how it will work."
+)

@@ -37,6 +37,7 @@ class StepStrip(QWidget):
         self._labels = labels
         self._short = short_labels
         self._current = 0
+        self._force_compact = False
         self.setFixedHeight(HEIGHT)
         self.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
         self.setFont(fonts.make_font(13))
@@ -74,8 +75,13 @@ class StepStrip(QWidget):
                 width += connector[0] + connector[1] * 2
         return width
 
+    def set_compact(self, compact: bool) -> None:
+        """Force the short labels, as the design does in small windows."""
+        self._force_compact = compact
+        self.update()
+
     def compact(self) -> bool:
-        return self._width(self._labels, CONNECTOR) > self.width()
+        return self._force_compact or self._width(self._labels, CONNECTOR) > self.width()
 
     def sizeHint(self) -> QSize:  # noqa: N802
         return QSize(self._width(self._labels, CONNECTOR), HEIGHT)

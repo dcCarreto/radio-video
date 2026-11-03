@@ -41,6 +41,9 @@ class ThemeManager(QObject):
         if NATIVE_STYLE in styles:
             app.setStyle(NATIVE_STYLE)
         app.styleHints().colorSchemeChanged.connect(self._on_system_scheme_changed)
+        # The format picker places its popup itself; the scroll-in animation would start
+        # from the default geometry and show the popup in the wrong place.
+        QApplication.setEffectEnabled(Qt.UIEffect.UI_AnimateCombo, False)
         self.apply()
 
     @property

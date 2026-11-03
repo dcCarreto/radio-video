@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from PySide6.QtCore import QRectF, QSize, Qt
-from PySide6.QtGui import QPaintEvent
+from PySide6.QtGui import QFont, QPaintEvent
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QSizePolicy, QVBoxLayout, QWidget
 
 from radio_video.ui import icons, theme
@@ -90,6 +90,7 @@ class Note(QFrame):
         self.text = label(text, TextStyle.BODY, wrap=True)
         self.text.setFont(fonts.make_font(13))
         self.text.setTextFormat(Qt.TextFormat.PlainText)
+        self.text.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
         icon_column = QVBoxLayout()
         icon_column.setContentsMargins(0, 1, 0, 0)
         icon_column.addWidget(self.icon)
@@ -199,24 +200,46 @@ class CodeBlock(QFrame):
         self.label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         self.label.setTextFormat(Qt.TextFormat.PlainText)
         self.copy_button: Button | None = None
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(12, 4, 4, 4)
-        layout.setSpacing(8)
-        layout.addWidget(self.label, 1)
+        self._layout = QHBoxLayout(self)
+        self._layout.setContentsMargins(12, 4, 4, 4)
+        self._layout.setSpacing(8)
+        self._layout.addWidget(self.label, 1)
         if copy_text is not None:
-            self.copy_button = Button(
-                copy_text, ButtonKind.SUBTLE, icon="Copy", size=ButtonSize.SMALL
-            )
-            if copy_tooltip:
-                self.copy_button.setToolTip(copy_tooltip)
-            layout.addWidget(self.copy_button)
+            self.add_copy_button(copy_text, copy_tooltip)
         self.setMinimumHeight(40)
         follow_theme(self)
+
+    def add_copy_button(self, text: str, tooltip: str = "") -> Button:
+        button = Button(text, ButtonKind.SUBTLE, icon="Copy", size=ButtonSize.SMALL)
+        if tooltip:
+            button.setToolTip(tooltip)
+        self._layout.addWidget(button)
+        self.copy_button = button
+        return button
 
     def paintEvent(self, event: QPaintEvent) -> None:  # noqa: N802
         painter = antialiased(self)
         p = theme.palette()
         fill_rounded(painter, QRectF(self.rect()), 4, p.sunken, p.border)
+
+
+class NumberBox(QWidget):
+    """Small ink square with a step or field number."""
+
+    def __init__(self, number: int, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._number = number
+        self.setFixedSize(20, 20)
+        self.setFont(fonts.make_font(11, QFont.Weight.Bold))
+        follow_theme(self)
+
+    def paintEvent(self, event: QPaintEvent) -> None:  # noqa: N802
+        painter = antialiased(self)
+        p = theme.palette()
+        fill_rounded(painter, QRectF(self.rect()), 2, p.sel)
+        painter.setPen(p.on_sel)
+        painter.setFont(self.font())
+        painter.drawText(QRectF(self.rect()), int(Qt.AlignmentFlag.AlignCenter), str(self._number))
 
 
 class PlannedBanner(QFrame):

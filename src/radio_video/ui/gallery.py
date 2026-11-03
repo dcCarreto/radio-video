@@ -29,12 +29,13 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from radio_video.ui import icons, theme
+from radio_video.ui import gallery_states, icons, theme
 from radio_video.ui.gallery_components import components_page
 from radio_video.ui.native.dwm import style_title_bar
 from radio_video.ui.theme import fonts
 from radio_video.ui.theme.fonts import TextStyle
 from radio_video.ui.theme.tokens import TOKENS, Palette, Scheme
+from radio_video.ui.widgets.app_icon import AppIcon
 from radio_video.ui.widgets.focus_ring import FocusRing
 
 logger = logging.getLogger(__name__)
@@ -85,17 +86,6 @@ class _IconTile(QWidget):
         icons.paint_icon(
             painter, QRectF(4, 4, self._size, self._size), self._name, theme.palette().text
         )
-
-
-class _AppIconTile(QWidget):
-    def __init__(self, size: int) -> None:
-        super().__init__()
-        self._size = size
-        self.setFixedSize(size, size)
-
-    def paintEvent(self, event: QPaintEvent) -> None:  # noqa: N802
-        painter = QPainter(self)
-        icons.paint_app_icon(painter, QRectF(0, 0, self._size, self._size))
 
 
 def _page(*widgets: QWidget) -> QWidget:
@@ -157,7 +147,7 @@ def icons_page() -> QWidget:
     app_layout.setContentsMargins(0, 0, 0, 0)
     app_layout.setSpacing(28)
     for size in (256, 32, 16):
-        app_layout.addWidget(_AppIconTile(size), 0, Qt.AlignmentFlag.AlignBottom)
+        app_layout.addWidget(AppIcon(size), 0, Qt.AlignmentFlag.AlignBottom)
     app_layout.addStretch()
     return _page(
         _label("Icons", TextStyle.TITLE_LARGE),
@@ -206,7 +196,11 @@ class GalleryWindow(QMainWindow):
         self.list.setFixedWidth(260)
         for page in self._pages:
             self.list.addItem(page.title)
+        for number, state in enumerate(gallery_states.STATES, start=1):
+            self.list.addItem(f"{number:02d} {state.title}")
         self.stack = QStackedWidget()
+        self.window_size = "l"
+        self.state_windows: list[QWidget] = []
 
         self.scheme_buttons = QButtonGroup(self)
         bar = QHBoxLayout()
@@ -217,6 +211,16 @@ class GalleryWindow(QMainWindow):
             button.setChecked(scheme is None)
             button.clicked.connect(lambda _=False, s=scheme: theme.current().set_override(s))
             self.scheme_buttons.addButton(button)
+            bar.addWidget(button)
+        bar.addSpacing(24)
+        bar.addWidget(_label("Window", TextStyle.KICKER, "secondary"))
+        self.size_buttons = QButtonGroup(self)
+        for text, size in (("1440 × 900", "l"), ("960 × 720", "s")):
+            button = QPushButton(text)
+            button.setCheckable(True)
+            button.setChecked(size == "l")
+            button.clicked.connect(lambda _=False, value=size: setattr(self, "window_size", value))
+            self.size_buttons.addButton(button)
             bar.addWidget(button)
         bar.addStretch()
 
@@ -229,9 +233,18 @@ class GalleryWindow(QMainWindow):
         layout.addLayout(right, 1)
         self.setCentralWidget(central)
 
-        self.list.currentRowChanged.connect(self.show_page)
+        self.list.currentRowChanged.connect(self._on_row)
         theme.current().changed.connect(self._on_theme_changed)
         self.list.setCurrentRow(0)
+
+    def _on_row(self, row: int) -> None:
+        if row < len(self._pages):
+            self.show_page(row)
+            return
+        state = gallery_states.STATES[row - len(self._pages)]
+        window = gallery_states.build(state, self.window_size)
+        window.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+        self.state_windows = [w for w in self.state_windows if w.isVisible()] + [window]
 
     def show_page(self, index: int) -> QScrollArea:
         if index not in self._built:
@@ -289,6 +302,26 @@ def capture(window: GalleryWindow, pages: Sequence[GalleryPage], folder: Path) -
     return saved
 
 
+def capture_states(folder: Path, keys: Sequence[str] = ()) -> list[Path]:
+    """Save each design state as ``{state}-{theme}-{size}.png``, like the design renders."""
+    folder.mkdir(parents=True, exist_ok=True)
+    saved: list[Path] = []
+    manager = theme.current()
+    for scheme in Scheme:
+        manager.set_override(scheme)
+        for state in gallery_states.STATES:
+            if keys and state.key not in keys:
+                continue
+            for size in gallery_states.SIZES:
+                window = gallery_states.build(state, size)
+                path = folder / f"{state.key}-{scheme.value}-{size}.png"
+                gallery_states.capture(window).save(str(path))
+                saved.append(path)
+                window.discard_for_gallery()
+    manager.set_override(None)
+    return saved
+
+
 def run(app: QApplication, args: Sequence[str]) -> int:
     theme.install(app)
     FocusRing.install(app)
@@ -299,7 +332,12 @@ def run(app: QApplication, args: Sequence[str]) -> int:
     if "--capture" in args:
         position = list(args).index("--capture")
         folder = Path(args[position + 1]) if position + 1 < len(args) else Path("gallery")
-        for path in capture(window, pages, folder):
+        keys = []
+        if "--states" in args:
+            keys = list(args)[list(args).index("--states") + 1].split(",")
+        else:
+            capture(window, pages, folder)
+        for path in capture_states(folder, keys):
             logger.info("Saved %s", path)
         return 0
     return app.exec()

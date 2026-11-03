@@ -7,10 +7,12 @@ from collections.abc import Sequence
 from PySide6.QtWidgets import QApplication
 
 from radio_video import APP_NAME, __version__
-from radio_video.ffmpeg.capabilities import CapabilityError, list_encoders
+from radio_video.ffmpeg.capabilities import CapabilityError, ffmpeg_version, list_encoders
 from radio_video.ffmpeg.locator import FFmpegNotFoundError, FFmpegTools, locate_tools
 from radio_video.services.preview import purge_stale_previews
-from radio_video.ui.main_window import MainWindow
+from radio_video.ui import theme
+from radio_video.ui.widgets.focus_ring import FocusRing
+from radio_video.ui.windows.main_window import Engine, MainWindow
 
 logger = logging.getLogger(__name__)
 
@@ -32,22 +34,25 @@ def main(argv: Sequence[str] | None = None) -> int:
 
         return gallery.run(app, args)
 
+    theme.install(app)
+    FocusRing.install(app)
+
     tools: FFmpegTools | None = None
-    tools_error: str | None = None
     encoders: frozenset[str] = frozenset()
+    version: str | None = None
     try:
         tools = locate_tools()
         logger.info("Using ffmpeg %s and ffprobe %s", tools.ffmpeg, tools.ffprobe)
         encoders = list_encoders(tools.ffmpeg)
+        version = ffmpeg_version(tools.ffmpeg)
     except FFmpegNotFoundError as exc:
-        tools_error = str(exc)
-        logger.error(tools_error)
+        logger.error(str(exc))
     except CapabilityError as exc:
         logger.error(str(exc))
 
     if removed := purge_stale_previews():
         logger.info("Removed %d stale preview folders", removed)
 
-    window = MainWindow(tools, tools_error, encoders)
+    window = MainWindow(Engine(tools, encoders, version))
     window.show()
     return app.exec()
