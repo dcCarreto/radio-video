@@ -30,7 +30,10 @@ def test_dialog_generates_and_plays_converted_preview(
     qtbot: QtBot, ffmpeg_tools: FFmpegTools, sample_video: Path
 ) -> None:
     media = probe(sample_video, ffmpeg_tools.ffprobe)
-    dialog = PreviewDialog(ffmpeg_tools.ffmpeg, media, MP4, Quality.SMALL, PreviewKind.SHORT)
+    # CI runners have no audio device; Qt Multimedia can hang stopping audio playback there.
+    dialog = PreviewDialog(
+        ffmpeg_tools.ffmpeg, media, MP4, Quality.SMALL, PreviewKind.SHORT, autoplay=False
+    )
     qtbot.addWidget(dialog)
     estimates: list[int] = []
     dialog.size_estimated.connect(estimates.append)

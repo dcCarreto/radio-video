@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from radio_video.models.conversion import AudioOptions, ConversionSettings, VideoOptions
 from radio_video.models.media import MediaInfo
+from radio_video.models.tracks import main_audio
 from radio_video.utils.formatting import format_bitrate
 
 CODEC_NAMES = {
@@ -41,6 +42,8 @@ def _describe_audio(audio: AudioOptions) -> str:
     parts = [f"{codec_display_name(audio.codec)} audio"]
     if audio.bitrate:
         parts.append(format_bitrate(audio.bitrate))
+    elif audio.quality is not None:
+        parts.append(f"variable bitrate, quality {audio.quality:g}")
     if audio.codec in _PCM_BYTES_PER_SAMPLE or audio.codec == "flac":
         parts.append("lossless")
     return ", ".join(parts)
@@ -59,7 +62,7 @@ def _audio_bits_per_second(audio: AudioOptions, media: MediaInfo) -> int | None:
     if audio.bitrate:
         return audio.bitrate
     bytes_per_sample = _PCM_BYTES_PER_SAMPLE.get(audio.codec)
-    source = media.audio_streams[0] if media.audio_streams else None
+    source = main_audio(media)
     if bytes_per_sample is None or source is None:
         return None
     sample_rate = audio.sample_rate or source.sample_rate

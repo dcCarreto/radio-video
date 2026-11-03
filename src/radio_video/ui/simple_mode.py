@@ -266,6 +266,7 @@ class SimpleModePanel(QGroupBox):
                 destination=output,
                 settings=fmt.settings(self.selected_quality),
                 duration=self._media.duration,
+                streams=fmt.plan(self._media),
             )
             self._runner.start(job)
         except (ConversionError, ValueError) as exc:

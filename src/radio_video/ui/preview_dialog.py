@@ -38,12 +38,15 @@ class PreviewDialog(QDialog):
         quality: Quality,
         kind: PreviewKind,
         parent: QWidget | None = None,
+        *,
+        autoplay: bool = True,
     ) -> None:
         super().__init__(parent)
         self._media = media
         self._format = output_format
         self._quality = quality
         self._kind = kind
+        self._autoplay = autoplay
         self._settings = output_format.settings(quality)
         self._range_text = ""
         self.generator = PreviewGenerator(ffmpeg, self)
@@ -92,7 +95,13 @@ class PreviewDialog(QDialog):
 
     def start(self) -> bool:
         try:
-            self.generator.generate(self._media, self._settings, self._format.extension, self._kind)
+            self.generator.generate(
+                self._media,
+                self._settings,
+                self._format.extension,
+                self._kind,
+                self._format.plan(self._media),
+            )
         except (ConversionError, ValueError, OSError) as exc:
             self.status_label.setText(f"Could not create the preview: {exc}")
             self.cancel_button.hide()
@@ -133,7 +142,8 @@ class PreviewDialog(QDialog):
             self.size_estimated.emit(estimate)
         self.player.setEnabled(True)
         self.player.load(sample.path)
-        self.player.player.play()
+        if self._autoplay:
+            self.player.player.play()
 
     @Slot(str)
     def _on_failed(self, message: str) -> None:

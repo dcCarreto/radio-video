@@ -34,8 +34,8 @@ class ConversionError(RadioVideoError):
 
 
 def partial_path(destination: Path) -> Path:
-    """Temporary file next to the destination, keeping its extension so FFmpeg picks the muxer."""
-    return destination.with_name(f".{destination.stem}.partial{destination.suffix}")
+    """Temporary file next to the destination; FFmpeg is told the muxer explicitly."""
+    return destination.with_name(f"{destination.name}.part")
 
 
 class ConversionRunner(QObject):

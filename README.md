@@ -33,15 +33,22 @@ control over encoding parameters is planned.
   information. Analysis runs in the background so the window stays responsive. When FFmpeg is
   missing, the window explains how to install it.
 - Conversion engine: runs FFmpeg asynchronously with progress (percentage, speed, time remaining)
-  and cancellation. Output is written to a temporary file and moved into place only on success, so
-  failed or canceled conversions leave nothing behind. Supports video and audio codec settings,
-  resolution, frame rate, pixel format, audio bitrate, sample rate and channels, stream copy, audio
-  extraction, time ranges and metadata preservation.
+  and cancellation. Output is written to a temporary `.part` file next to the destination and
+  moved into place only on success, so failed or canceled conversions leave nothing behind.
+  Supports video and audio codec settings, resolution, frame rate, pixel format, audio bitrate or
+  variable-bitrate quality, sample rate and channels, stream copy, audio extraction, track
+  selection, time ranges and metadata preservation.
 - Simple Mode in the main window:
   - Output formats: MP4 (H.264 or H.265 with AAC), MKV (H.264 + AAC), WebM (VP9 + Opus), MP3,
     AAC (M4A), Opus, Ogg Vorbis, FLAC and WAV. Only formats whose encoders are present in the
     installed FFmpeg are offered, and video formats only for sources that contain video.
   - Quality presets (High, Balanced, Small file); lossless formats always keep full quality.
+    Audio bitrates: MP3 320/192/128 kb/s, AAC (M4A) 256/160/96 kb/s, Opus 160/96/64 kb/s;
+    Ogg Vorbis uses variable bitrate.
+  - Tracks: video formats keep every audio track. MP4 and WebM convert text subtitles to MP4
+    text and WebVTT (image-based subtitles are left out); MKV copies all subtitles. Cover art is
+    kept in MP4, MKV, MP3, AAC (M4A) and FLAC. Audio formats extract the default audio track;
+    lossy ones mix surround sound down to stereo.
   - Destination folder selection. Output names never overwrite existing files.
   - Output summary: file name, output streams and estimated size when it is predictable
     (bitrate-based and uncompressed audio).
@@ -64,7 +71,6 @@ control over encoding parameters is planned.
 - Batch conversion, conversion queue and conversion history.
 - Stream copy when re-encoding is not needed.
 - Hardware acceleration detection (NVENC, Quick Sync, AMF).
-- Preservation of subtitles and multiple audio tracks.
 - Windows installer.
 
 ## Technology Stack
