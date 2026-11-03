@@ -29,9 +29,19 @@ control over encoding parameters is planned.
 - FFmpeg and FFprobe discovery through environment variables or `PATH`.
 - Media analysis with FFprobe: container, duration, size, bitrate, tags, and per-stream codec,
   resolution, frame rate, pixel format, sample rate, channels, language and title.
-- Main window: open a file from the menu, the Open button or by drag and drop, and view its media
-  information. Analysis runs in the background so the window stays responsive. When FFmpeg is
-  missing, the window explains how to install it.
+- Main window in a light or dark theme that follows Windows, with a step strip (Open, Check,
+  Choose, Preview, Convert) and a status bar showing the conversion engine:
+  - Start screen: drop a file or open it with the button or Ctrl+O. Reading the file runs in the
+    background. Several files, folders and drops during a conversion are refused with the reason.
+  - When FFmpeg is missing, a one-time setup page shows the winget command (with Copy), the
+    environment variables for a custom location and a Check Again button.
+  - A loaded file shows a plain-language summary ("1 video track, 3 audio tracks (Portuguese,
+    English)…"), container facts and every track with codec, details, language, title and the
+    default flag.
+  - Keyboard: Ctrl+O, Ctrl+Enter (convert), Ctrl+P and Ctrl+Shift+P (previews), Esc (cancel),
+    Ctrl+1–4 (tabs), F1 (About); a visible focus ring for keyboard use.
+  - Conversion progress also shows on the taskbar button, and a notification reports the result
+    when the window is in the background.
 - Conversion engine: runs FFmpeg asynchronously with progress (percentage, speed, time remaining)
   and cancellation. Output is written to a temporary `.part` file next to the destination and
   moved into place only on success, so failed or canceled conversions leave nothing behind.
@@ -49,12 +59,17 @@ control over encoding parameters is planned.
     text and WebVTT (image-based subtitles are left out); MKV copies all subtitles. Cover art is
     kept in MP4, MKV, MP3, AAC (M4A) and FLAC. Audio formats extract the default audio track;
     lossy ones mix surround sound down to stereo.
-  - Destination folder selection. Output names never overwrite existing files.
-  - Output summary: file name, output streams and estimated size when it is predictable
-    (bitrate-based and uncompressed audio).
+  - Destination folder, remembered between sessions (Videos or Music the first time). Output names
+    never overwrite existing files: a number is added, as in "clip (1).mp4".
+  - "You'll get" card: output name and what goes into it (video, audio tracks, subtitles, cover
+    art, what is left out), with an honest size estimate: calculated when the bitrate fixes it,
+    measured after a preview with the same settings, otherwise "Depends on the content".
   - Progress with percentage, speed and remaining time; cancel; Show in Folder after success.
-  - Opening other files is blocked while a conversion runs, and closing the window asks for
-    confirmation.
+  - Failures are explained in plain language (what happened, what to do) with the most likely fix
+    as a button and the technical details one click away.
+  - Settings and opening other files are locked while a conversion runs, and closing the window
+    asks for confirmation.
+- Queue, History and Settings appear as planned tabs.
 - Preview player:
   - **Short preview** converts a 15-second sample, starting a third of the way into the file, with
     the selected format and quality. Files of 15 seconds or less are converted entirely.
@@ -117,7 +132,8 @@ radio-video            # installed entry point
 python -m radio_video  # equivalent
 ```
 
-Pass `--debug` for verbose logging.
+Pass `--debug` for verbose logging. `--ui-gallery` opens a gallery of the design foundations,
+components and every screen state with demo data; add `--capture DIR` to save them as PNG files.
 
 Open a file, choose a format, quality and destination folder in the **Convert** panel, and press
 **Convert**.
