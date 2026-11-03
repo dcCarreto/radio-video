@@ -89,6 +89,8 @@ jobs:
 
   installer:
     name: Windows installer
+    # Releases build their own installer with the release version.
+    if: github.event_name == 'pull_request'
     runs-on: windows-latest
     timeout-minutes: 30
     steps:
@@ -119,9 +121,9 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
         run: |
-          $app = "build\installer\distadio-video"
-          & "$appfmpegfmpeg.exe" -hide_banner -version
-          Start-Process -Wait -FilePath "$appadio-video.exe" `
+          $app = "build/installer/dist/radio-video"
+          & "$app/ffmpeg/ffmpeg.exe" -hide_banner -version
+          Start-Process -Wait -FilePath "$app/radio-video.exe" `
             -ArgumentList "--ui-gallery", "--capture", "smoke", "--states", "start,loaded"
           if (-not (Test-Path "smoke\loaded-light-l.png")) { throw "The frozen app did not start" }
       - uses: actions/upload-artifact@v4
