@@ -21,6 +21,7 @@ jobs:
     name: Branch policy
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Validate source and target branches
         env:
@@ -43,9 +44,10 @@ jobs:
   lint:
     name: Lint and type check
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.13"
           cache: pip
@@ -61,13 +63,14 @@ jobs:
   test:
     name: Test (Python ${{ matrix.python-version }})
     runs-on: windows-latest
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
         python-version: ["3.11", "3.14"]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python-version }}
           cache: pip
@@ -84,12 +87,58 @@ jobs:
           RADIO_VIDEO_REQUIRE_FFMPEG: "1"
         run: pytest
 
+  installer:
+    name: Windows installer
+    # Releases build their own installer with the release version.
+    if: github.event_name == 'pull_request'
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+          cache: pip
+      - name: Install Inno Setup
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) {
+            choco install innosetup --yes --no-progress
+          }
+      - name: Install dependencies
+        run: python -m pip install -e ".[installer]"
+      - name: Build installer
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $version = python -c "import radio_video; print(radio_video.__version__)"
+          python scripts/build_installer.py --version $version
+      - name: Smoke test the frozen application
+        shell: pwsh
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          $app = "build/installer/dist/radio-video"
+          & "$app/ffmpeg/ffmpeg.exe" -hide_banner -version
+          Start-Process -Wait -FilePath "$app/radio-video.exe" `
+            -ArgumentList "--ui-gallery", "--capture", "smoke", "--states", "start,loaded"
+          if (-not (Test-Path "smoke\loaded-light-l.png")) { throw "The frozen app did not start" }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer
+          path: dist/Radio-Video-Setup-*.exe
+          retention-days: 7
+
   dependencies:
     name: Dependency check
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.13"
           cache: pip
@@ -103,11 +152,12 @@ jobs:
   build:
     name: Build package
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.13"
           cache: pip

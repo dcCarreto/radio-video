@@ -38,6 +38,17 @@ FFmpeg-based media backend together with shared FFmpeg libraries (`avcodec`, `av
 `avutil`, `swresample`, `swscale`) built by The Qt Company under the LGPL. These libraries are
 covered by the same LGPL obligations as Qt itself.
 
+### Lucide icons
+
+| | |
+|---|---|
+| Project | [Lucide](https://lucide.dev/) 0.460.0 (`lucide-static`) |
+| License | ISC License; portions from Feather under the MIT License |
+| How it is used | SVG files bundled in `src/radio_video/ui/icons/lucide/`, recoloured at runtime |
+
+Only the icons the interface uses are bundled. The ISC license text ships next to them in
+`src/radio_video/ui/icons/lucide/LICENSE` and must accompany any redistribution.
+
 ## External Tools
 
 ### FFmpeg and FFprobe
@@ -45,27 +56,31 @@ covered by the same LGPL obligations as Qt itself.
 | | |
 |---|---|
 | Project | [FFmpeg](https://ffmpeg.org/) |
-| License | LGPLv2.1+ or GPLv2+/GPLv3+, depending on the build configuration |
+| License | GPLv3 for the build bundled with the installer; any FFmpeg a user installs keeps its own license |
 | How it is used | Separate executables started as child processes |
+| Bundled build | Latest GPL shared build of FFmpeg 9.0 from [BtbN/FFmpeg-Builds](https://github.com/BtbN/FFmpeg-Builds), unmodified |
 
 Radio/Video does not link against FFmpeg. It runs the `ffmpeg` and `ffprobe` executables as
 independent processes, communicating only through command-line arguments and standard streams.
 
-Radio/Video does not currently redistribute FFmpeg. Users install it separately (see the README).
-The license of the FFmpeg build a user installs applies to that build. For example, the
-`full_build` packages from gyan.dev are configured with `--enable-gpl --enable-version3` and are
-therefore licensed under GPLv3.
+The Windows installer redistributes a GPL build of FFmpeg (with x264, x265 and other GPL
+libraries) in the `ffmpeg` folder next to the application. Bundling a GPL program alongside
+MIT code is allowed because FFmpeg runs as a separate program; the GPL applies to that FFmpeg
+build, not to Radio/Video. Each release meets the GPL obligations for it:
 
-Before any Radio/Video release bundles FFmpeg binaries, the following must be decided and
-documented here:
+- The license text ships as `ffmpeg\LICENSE.txt`.
+- The exact version and `configure` options ship as `ffmpeg\BUILDCONF.txt`.
+- The corresponding source is attached to every GitHub release that contains an installer:
+  the FFmpeg source at the exact commit of the bundled build, and the BtbN/FFmpeg-Builds scripts
+  at the commit that produced it, which pin the version and source location of every library
+  compiled into it. `ffmpeg\SOURCE.txt` points to both.
+- The binaries are not modified.
 
-- Whether to ship an LGPL build (no `--enable-gpl`, no `--enable-nonfree`) or a GPL build.
-  Bundling a GPL build is possible alongside MIT code because FFmpeg runs as a separate program,
-  but the GPL obligations for that binary still apply: the license text, the exact
-  `configure` options, and the corresponding source code must be provided.
-- Builds configured with `--enable-nonfree` (for example with `libfdk_aac`) must never be
-  redistributed.
-- The exact version, build configuration and source location of the bundled build.
+Builds configured with `--enable-nonfree` (for example with `libfdk_aac`) must never be
+redistributed; `scripts/build_installer.py` only uses BtbN's `gpl` variants.
+
+When Radio/Video runs from source or from the wheel, FFmpeg is not bundled. Users install it
+separately (see the README) and the license of that build applies to it.
 
 ### Codec patents
 
@@ -89,3 +104,10 @@ distributed application packages.
 | [setuptools](https://github.com/pypa/setuptools) | MIT |
 | [setuptools-scm](https://github.com/pypa/setuptools-scm) | MIT |
 | [pip-audit](https://github.com/pypa/pip-audit) (CI only) | Apache-2.0 |
+
+### Build tools for the Windows installer
+
+| Tool | License | Notes |
+|---|---|---|
+| [PyInstaller](https://pyinstaller.org/) | GPLv2 with a bootloader exception | The exception allows distributing the bootloader it adds to the executable under any license. |
+| [Inno Setup](https://jrsoftware.org/isinfo.php) | Inno Setup License (free, permissive) | Generates the installer and uninstaller; no Inno Setup license terms apply to the installed application. |

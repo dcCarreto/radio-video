@@ -1,6 +1,8 @@
+from pathlib import Path
+
 import pytest
 
-from radio_video.ffmpeg.command import video_arguments
+from radio_video.ffmpeg.command import muxer_for, video_arguments
 from radio_video.models.presets import OUTPUT_FORMATS, OutputFormat, Quality, available_formats
 
 ALL_ENCODERS = frozenset(encoder for fmt in OUTPUT_FORMATS for encoder in fmt.encoders)
@@ -61,3 +63,29 @@ def test_video_sources_can_extract_audio() -> None:
     formats = available_formats(ALL_ENCODERS, source_has_video=True)
     assert any(fmt.is_video for fmt in formats)
     assert any(not fmt.is_video for fmt in formats)
+
+
+@pytest.mark.parametrize(
+    ("key", "high", "balanced", "small"),
+    [
+        ("mp3", 320_000, 192_000, 128_000),
+        ("m4a-aac", 256_000, 160_000, 96_000),
+        ("opus", 160_000, 96_000, 64_000),
+    ],
+)
+def test_audio_bitrates_match_the_design(key: str, high: int, balanced: int, small: int) -> None:
+    fmt = _format(key)
+    bitrates = [fmt.settings(q).audio.bitrate for q in Quality]  # type: ignore[union-attr]
+    assert bitrates == [high, balanced, small]
+
+
+def test_vorbis_is_quality_based() -> None:
+    audio = _format("ogg-vorbis").settings(Quality.BALANCED).audio
+    assert audio is not None
+    assert audio.bitrate is None
+    assert audio.quality == 6
+
+
+@pytest.mark.parametrize("fmt", OUTPUT_FORMATS, ids=lambda fmt: fmt.key)
+def test_every_format_names_a_muxer_for_its_extension(fmt: OutputFormat) -> None:
+    assert muxer_for(Path(f"out{fmt.extension}")) == fmt.muxer

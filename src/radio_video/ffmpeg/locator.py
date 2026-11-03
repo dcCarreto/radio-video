@@ -11,6 +11,8 @@ from radio_video.errors import RadioVideoError
 
 FFMPEG_ENV = "RADIO_VIDEO_FFMPEG"
 FFPROBE_ENV = "RADIO_VIDEO_FFPROBE"
+# The Windows installer places FFmpeg in this folder next to the executable.
+BUNDLED_FOLDER = "ffmpeg"
 
 
 class FFmpegNotFoundError(RadioVideoError):
@@ -58,16 +60,24 @@ def _find(
     raise FFmpegNotFoundError(program, env_var)
 
 
+def bundled_dirs() -> tuple[Path, ...]:
+    """Folders with the FFmpeg that ships with the installed application, if any."""
+    if getattr(sys, "frozen", False):
+        return (Path(sys.executable).resolve().parent / BUNDLED_FOLDER,)
+    return ()
+
+
 def locate_tools(
-    search_dirs: Iterable[Path] = (),
+    search_dirs: Iterable[Path] | None = None,
     environ: Mapping[str, str] | None = None,
 ) -> FFmpegTools:
     """Find the ffmpeg and ffprobe executables.
 
-    Lookup order: environment variable override, ``search_dirs``, then ``PATH``.
+    Lookup order: environment variable override, ``search_dirs`` (by default the FFmpeg bundled
+    with the installed application), then ``PATH``.
     """
     env = os.environ if environ is None else environ
-    dirs = tuple(search_dirs)
+    dirs = tuple(bundled_dirs() if search_dirs is None else search_dirs)
     return FFmpegTools(
         ffmpeg=_find("ffmpeg", FFMPEG_ENV, dirs, env),
         ffprobe=_find("ffprobe", FFPROBE_ENV, dirs, env),

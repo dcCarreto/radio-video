@@ -3,7 +3,12 @@ from pathlib import Path
 import pytest
 
 from radio_video.ffmpeg import FFmpegTools
-from radio_video.ffmpeg.capabilities import CapabilityError, list_encoders, parse_encoders
+from radio_video.ffmpeg.capabilities import (
+    CapabilityError,
+    list_encoders,
+    parse_encoders,
+    parse_version,
+)
 
 SAMPLE = """Encoders:
  V..... = Video
@@ -44,3 +49,17 @@ def test_missing_executable(tmp_path: Path) -> None:
 def test_list_encoders_from_ffmpeg(ffmpeg_tools: FFmpegTools) -> None:
     encoders = list_encoders(ffmpeg_tools.ffmpeg)
     assert {"libx264", "aac", "flac", "pcm_s16le"} <= encoders
+
+
+@pytest.mark.parametrize(
+    ("line", "version"),
+    [
+        ("ffmpeg version 7.1-full_build-www.gyan.dev Copyright (c) 2000-2024", "7.1"),
+        ("ffmpeg version n6.1.1 Copyright", "6.1.1"),
+        ("ffmpeg version 9.0.2-essentials_build", "9.0.2"),
+        ("ffmpeg version N-112233-gabcdef", None),
+        ("not ffmpeg", None),
+    ],
+)
+def test_parse_version(line: str, version: str | None) -> None:
+    assert parse_version(line) == version
