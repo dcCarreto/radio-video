@@ -25,7 +25,7 @@ from radio_video.ui import viewmodel as vm
 from radio_video.ui.demo import DEMO_FOLDER, DEMO_MEDIA
 from radio_video.ui.dialogs.failed_dialog import FailedDialog
 from radio_video.ui.errors_map import Failure
-from radio_video.ui.state import PreviewKind, Progress, UiState
+from radio_video.ui.state import Mode, Page, PreviewKind, Progress, UiState
 from radio_video.ui.widgets.drop_zone import DropState
 from radio_video.ui.windows.main_window import COMPACT_BELOW, Engine, MainWindow
 from radio_video.ui.windows.preview_window import Phase, PreviewRequest, PreviewWindow
@@ -60,7 +60,8 @@ def demo_window(size: str = "l") -> MainWindow:
     settings = QSettings(
         str(Path(tempfile.gettempdir()) / "rv-gallery.ini"), QSettings.Format.IniFormat
     )
-    engine = Engine(FFmpegTools(Path("ffmpeg.exe"), Path("ffprobe.exe")), ALL_ENCODERS, "7.1")
+    links = Path("C:/Users/Ana/AppData/Local/Microsoft/WinGet/Links")
+    engine = Engine(FFmpegTools(links / "ffmpeg.exe", links / "ffprobe.exe"), ALL_ENCODERS, "7.1")
     window = MainWindow(engine, settings=settings)
     window.output_namer = _demo_names
     window.folder_writable = lambda _folder: True
@@ -131,6 +132,23 @@ def _format(key: str) -> Callable[[MainWindow], None]:
 def _blocked(window: MainWindow) -> None:
     _converting(window)
     window.machine.drag_over(accepted=True)
+
+
+def _advanced(tab: str) -> Callable[[MainWindow], None]:
+    def apply(window: MainWindow) -> None:
+        _loaded(window)
+        window.machine.set_mode(Mode.ADVANCED)
+        window.convert_page.file.panel.advanced.tabs.set_current(tab)
+
+    return apply
+
+
+def _page(page: Page) -> Callable[[MainWindow], None]:
+    def apply(window: MainWindow) -> None:
+        _loaded(window)
+        window.machine.go(page)
+
+    return apply
 
 
 def _quit(window: MainWindow) -> None:
@@ -245,6 +263,11 @@ STATES = (
     GalleryState("pv-canceled", "Preview: canceled", _preview(Phase.CANCELED)),
     GalleryState("quit", "Quit during conversion", _quit),
     GalleryState("about", "About", _about),
+    GalleryState("adv-video", "Advanced Mode: Video (planned)", _advanced("video")),
+    GalleryState("adv-tracks", "Advanced Mode: Tracks (planned)", _advanced("tracks")),
+    GalleryState("queue", "Queue (planned)", _page(Page.QUEUE)),
+    GalleryState("history", "History (planned)", _page(Page.HISTORY)),
+    GalleryState("settings", "Settings (planned)", _page(Page.SETTINGS)),
 )
 
 

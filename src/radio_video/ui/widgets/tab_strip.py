@@ -24,16 +24,17 @@ INDICATOR = 3
 class TabSpec:
     key: str
     label: str
-    icon: IconName
+    icon: IconName | None = None
     planned: bool = False
     planned_text: str = "Planned"
     trailing: bool = False
 
 
 class TabButton(QRadioButton):
-    def __init__(self, spec: TabSpec, parent: QWidget | None = None) -> None:
+    def __init__(self, spec: TabSpec, height: int = HEIGHT, parent: QWidget | None = None) -> None:
         super().__init__(spec.label, parent)
         self.spec = spec
+        self._height = height
         self.setAttribute(Qt.WidgetAttribute.WA_Hover)
         self.setFont(fonts.make_font(14, QFont.Weight.DemiBold))
         self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
@@ -43,10 +44,12 @@ class TabButton(QRadioButton):
         follow_theme(self)
 
     def sizeHint(self) -> QSize:  # noqa: N802
-        width = PADDING_X * 2 + 16 + GAP + text_width(self.font(), self.text())
+        width = PADDING_X * 2 + text_width(self.font(), self.text())
+        if self.spec.icon:
+            width += 16 + GAP
         if self.spec.planned:
             width += GAP + badge_size(self.spec.planned_text, BadgeTone.PLANNED).width()
-        return QSize(width, HEIGHT - 1)
+        return QSize(width, self._height - 1)
 
     def hitButton(self, pos: QPoint) -> bool:  # noqa: N802
         return self.rect().contains(pos)
@@ -63,10 +66,10 @@ class TabButton(QRadioButton):
             painter.fillRect(QRectF(0, rect.height() - INDICATOR, rect.width(), INDICATOR), p.text)
         color = p.text if active or hovered else p.text_2
         x = float(PADDING_X)
-        icons.paint_icon(
-            painter, QRectF(x, (rect.height() - 16) / 2, 16, 16), self.spec.icon, color
-        )
-        x += 16 + GAP
+        if self.spec.icon:
+            icon_rect = QRectF(x, (rect.height() - 16) / 2, 16, 16)
+            icons.paint_icon(painter, icon_rect, self.spec.icon, color)
+            x += 16 + GAP
         painter.setFont(self.font())
         painter.setPen(color)
         label_width = text_width(self.font(), self.text())
@@ -101,25 +104,34 @@ class TabButton(QRadioButton):
 class TabStrip(QWidget):
     current_changed = Signal(str)
 
-    def __init__(self, tabs: list[TabSpec], parent: QWidget | None = None) -> None:
+    def __init__(
+        self,
+        tabs: list[TabSpec],
+        *,
+        height: int = HEIGHT,
+        padding: int = PADDING_X,
+        background: str = "bg",
+        parent: QWidget | None = None,
+    ) -> None:
         super().__init__(parent)
         self._buttons: list[TabButton] = []
+        self._background = background
         self._group = QButtonGroup(self)
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(PADDING_X, 0, PADDING_X, 1)
+        layout.setContentsMargins(padding, 0, padding, 1)
         layout.setSpacing(2)
         trailing_started = False
         for spec in tabs:
             if spec.trailing and not trailing_started:
                 layout.addStretch(1)
                 trailing_started = True
-            button = TabButton(spec, self)
+            button = TabButton(spec, height, self)
             self._group.addButton(button)
             layout.addWidget(button, 0, Qt.AlignmentFlag.AlignBottom)
             self._buttons.append(button)
         if not trailing_started:
             layout.addStretch(1)
-        self.setFixedHeight(HEIGHT)
+        self.setFixedHeight(height)
         self.setAccessibleName("Pages")
         self._group.buttonToggled.connect(self._on_toggled)
         follow_theme(self)
@@ -158,5 +170,5 @@ class TabStrip(QWidget):
     def paintEvent(self, event: QPaintEvent) -> None:  # noqa: N802
         painter = antialiased(self)
         p = theme.palette()
-        painter.fillRect(self.rect(), p.bg)
+        painter.fillRect(self.rect(), p.color(self._background))
         painter.fillRect(QRectF(0, self.height() - 1, self.width(), 1), p.border)

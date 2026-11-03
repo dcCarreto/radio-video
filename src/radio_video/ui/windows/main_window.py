@@ -57,8 +57,10 @@ from radio_video.ui.file_types import open_file_filter
 from radio_video.ui.native.dwm import style_title_bar
 from radio_video.ui.native.notify import Notifier
 from radio_video.ui.native.taskbar import TaskbarProgress, TaskbarState
+from radio_video.ui.pages.advanced_panel import output_summary
 from radio_video.ui.pages.convert_page import ConvertPage
 from radio_video.ui.pages.convert_panel import PanelView
+from radio_video.ui.pages.planned_pages import HistoryPage, QueuePage, SettingsPage
 from radio_video.ui.pages.start_view import make_drop_zone
 from radio_video.ui.state import (
     Dialog,
@@ -77,7 +79,6 @@ from radio_video.ui.strings import tr
 from radio_video.ui.theme.fonts import TextStyle
 from radio_video.ui.theme.tokens import Palette
 from radio_video.ui.widgets.drop_zone import DropState, check_drop, dropped_paths
-from radio_video.ui.widgets.frames import PlannedBanner
 from radio_video.ui.widgets.labels import label
 from radio_video.ui.widgets.painting import antialiased, fill_rounded, follow_theme
 from radio_video.ui.widgets.progress import Spinner
@@ -153,19 +154,6 @@ class _StatusItem(QWidget):
         self.dot.tone = "success" if ok else "warning"
         self.dot.update()
         self.setAccessibleName(text)
-
-
-def _planned_page(title: str, banner: str) -> QWidget:
-    page = QWidget()
-    layout = QVBoxLayout(page)
-    layout.setContentsMargins(0, 0, 0, 0)
-    layout.setSpacing(0)
-    layout.addWidget(PlannedBanner(banner, tr(s.BADGE_PLANNED)))
-    heading = label(title, TextStyle.TITLE_LARGE)
-    heading.setContentsMargins(24, 20, 24, 16)
-    layout.addWidget(heading)
-    layout.addStretch(1)
-    return page
 
 
 class MainWindow(QMainWindow):
@@ -268,12 +256,11 @@ class MainWindow(QMainWindow):
 
         self.pages = QStackedWidget()
         self.pages.addWidget(self.convert_page)
-        for title, banner in (
-            (s.TAB_QUEUE, s.PLANNED_QUEUE),
-            (s.TAB_HISTORY, s.PLANNED_HISTORY),
-            (s.TAB_SETTINGS, s.PLANNED_SETTINGS),
-        ):
-            self.pages.addWidget(_planned_page(tr(title), tr(banner)))
+        self.queue_page = QueuePage()
+        self.history_page = HistoryPage()
+        self.settings_page = SettingsPage(self.engine.tools, self.engine.version)
+        for planned in (self.queue_page, self.history_page, self.settings_page):
+            self.pages.addWidget(planned)
 
         central = QWidget()
         layout = QVBoxLayout(central)
@@ -323,6 +310,7 @@ class MainWindow(QMainWindow):
         shortcut("Ctrl+P", lambda: self.open_preview(PreviewKind.SAMPLE))
         shortcut("Ctrl+Shift+P", lambda: self.open_preview(PreviewKind.FULL))
         shortcut("Esc", self._on_escape)
+        shortcut("Ctrl+M", self.toggle_mode)
         for number, page in enumerate(PAGE_INDEX, start=1):
             shortcut(f"Ctrl+{number}", partial(self.tabs.set_current, page.value))
 
@@ -373,6 +361,11 @@ class MainWindow(QMainWindow):
             )
         file_view.set_overlay_visible(overlay)
         previous_job = self._last_job
+        advanced = state.mode is Mode.ADVANCED
+        if advanced:
+            fmt = self.current_format(state)
+            file_view.panel.advanced.show_settings(media, fmt, state.quality)
+        file_view.set_advanced(advanced)
         file_view.panel.apply_view(self.panel_view(state, media))
         if previous_job is not state.job:
             target = file_view.panel.focus_after_render()
@@ -420,6 +413,9 @@ class MainWindow(QMainWindow):
             speed_tip=vm.speed_tooltip(state.progress.speed),
             result_title=result_title,
             result_text=result_text,
+            summary=output_summary(media, fmt, state.quality)
+            if state.mode is Mode.ADVANCED
+            else "",
         )
 
     def _render_status(self, state: UiState) -> None:
@@ -543,11 +539,13 @@ class MainWindow(QMainWindow):
         self.machine.set_format(key, lossless=format_by_key(key).lossless)
 
     def _on_mode_changed(self, mode: Mode) -> None:
-        # Advanced Mode is planned; the segment returns to Simple until it exists.
-        if mode is Mode.ADVANCED:
-            self.convert_page.file.panel.mode.set_value(Mode.SIMPLE.value)
-            return
-        self.machine.set_mode(mode)
+        if not self.machine.set_mode(mode):
+            self.convert_page.file.panel.mode.set_value(self.machine.state.mode.value)
+
+    def toggle_mode(self) -> None:
+        if self.machine.state.screen is Screen.MAIN:
+            mode = Mode.SIMPLE if self.machine.state.mode is Mode.ADVANCED else Mode.ADVANCED
+            self.machine.set_mode(mode)
 
     def default_folder(self, media: MediaInfo) -> Path:
         saved = str(self.settings.value(LAST_FOLDER_KEY, "") or "")
@@ -832,6 +830,8 @@ class MainWindow(QMainWindow):
         if compact != self._compact:
             self._compact = compact
             self.convert_page.set_compact(compact)
+            for planned in (self.queue_page, self.history_page, self.settings_page):
+                planned.set_compact(compact)
 
     def showEvent(self, event: QShowEvent) -> None:  # noqa: N802
         super().showEvent(event)
