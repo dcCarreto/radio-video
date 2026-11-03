@@ -227,6 +227,29 @@ The branch model, commit conventions and pull request process are described in
 
 A cumulative history of changes merged into `dev`, newest first.
 
+### 2026-11-03
+
+- **#33 feat: ship a Windows installer with FFmpeg**: each release now includes
+  `Radio-Video-Setup-<version>.exe`, which installs without administrator rights and bundles a
+  GPL build of FFmpeg 9.0 (verified against its published SHA-256 digest); the matching FFmpeg
+  source and build scripts are attached to the release, and CI builds and smoke-tests the
+  installer on every pull request.
+- **#32 feat(ui): add the planned Advanced Mode, Queue, History and Settings screens**: preview
+  versions of the upcoming screens, marked as planned, so their layout can be reviewed before
+  they work.
+- **#31 feat(ui): add the converted preview window**: previews open in their own window with a
+  video canvas, player controls, the measured size and a notice when the settings change.
+- **#30 feat(ui): rebuild the main window on the new design**: start screen, file view with the
+  tracks table and source details, the Convert panel with format, quality, output name and size
+  estimate, progress, results, error dialogs with next steps, and a quit confirmation; the
+  window follows the Windows colour scheme and works by keyboard alone.
+- **#29 feat(ui): add UI state machine, view models and error messages**: the screen flow,
+  texts and FFmpeg error classification are kept separate from the widgets and covered by tests.
+- **#28 feat: keep every audio track, subtitles and cover art where the format allows**:
+  conversions keep all audio tracks, convert subtitles to the output format and keep cover art;
+  new bitrates for M4A and Opus, quality-based Vorbis, and the partial output is written as
+  `name.ext.part`.
+
 ### 2026-11-02
 
 - **#26 feat(ui): add design system widgets**: the building blocks of the redesigned
