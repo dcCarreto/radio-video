@@ -26,7 +26,11 @@ control over encoding parameters is planned.
 - Continuous integration: linting, type checking, tests on Windows, dependency audit and package
   build on every pull request.
 - Automated semantic versioning and GitHub releases when changes reach `main`.
-- FFmpeg and FFprobe discovery through environment variables or `PATH`.
+- Windows installer with FFmpeg included: installs for the current user without administrator
+  rights (or for all users), with a Start menu shortcut and an uninstaller. Releases also carry
+  the source of the bundled FFmpeg build.
+- FFmpeg and FFprobe discovery through environment variables, the copy bundled with the
+  installed application, or `PATH`.
 - Media analysis with FFprobe: container, duration, size, bitrate, tags, and per-stream codec,
   resolution, frame rate, pixel format, sample rate, channels, language and title.
 - Main window in a light or dark theme that follows Windows, with a step strip (Open, Check,
@@ -94,7 +98,6 @@ control over encoding parameters is planned.
 - Batch conversion, conversion queue and conversion history.
 - Stream copy when re-encoding is not needed.
 - Hardware acceleration detection (NVENC, Quick Sync, AMF).
-- Windows installer.
 
 ## Technology Stack
 
