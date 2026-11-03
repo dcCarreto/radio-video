@@ -7,7 +7,7 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
-from PySide6.QtCore import QRectF, Qt
+from PySide6.QtCore import QRectF, Qt, Signal
 from PySide6.QtGui import QPaintEvent
 from PySide6.QtWidgets import (
     QFrame,
@@ -519,11 +519,16 @@ def _path_row(path: str, icon: IconName | None = None) -> QWidget:
 
 
 class SettingsPage(_Page):
+    """Settings; only the Performance switch acts so far."""
+
+    hardware_changed = Signal(bool)
+
     def __init__(
         self,
         tools: FFmpegTools | None = None,
         version: str | None = None,
         save_folder: Path | None = None,
+        hardware_enabled: bool = True,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
@@ -566,16 +571,18 @@ class SettingsPage(_Page):
         hardware_layout = QHBoxLayout(hardware)
         hardware_layout.setContentsMargins(0, 0, 0, 0)
         hardware_layout.setSpacing(12)
-        switch = Switch()
-        switch.setChecked(True)
-        switch.setAccessibleName(tr(s.SETTINGS_HARDWARE))
-        hardware_layout.addWidget(switch, 0, Qt.AlignmentFlag.AlignTop)
+        self.hardware_switch = Switch()
+        self.hardware_switch.setChecked(hardware_enabled)
+        self.hardware_switch.setAccessibleName(tr(s.SETTINGS_HARDWARE))
+        self.hardware_switch.toggled.connect(self.hardware_changed)
+        hardware_layout.addWidget(self.hardware_switch, 0, Qt.AlignmentFlag.AlignTop)
         hardware_text = QVBoxLayout()
         hardware_text.setSpacing(0)
         hardware_text.addWidget(label(tr(s.SETTINGS_HARDWARE), TextStyle.BODY_STRONG, wrap=True))
-        hardware_text.addWidget(
-            label(tr(s.SETTINGS_HARDWARE_HELP), TextStyle.CAPTION, "secondary", wrap=True)
+        self.hardware_help = label(
+            tr(s.SETTINGS_HARDWARE_HELP), TextStyle.CAPTION, "secondary", wrap=True
         )
+        hardware_text.addWidget(self.hardware_help)
         hardware_layout.addLayout(hardware_text, 1)
 
         appearance = SegmentedControl(
@@ -637,6 +644,10 @@ class SettingsPage(_Page):
         layout.setSpacing(0)
         layout.addWidget(PlannedBanner(tr(s.PLANNED_SETTINGS), tr(s.BADGE_PLANNED)))
         layout.addWidget(_scroll(content), 1)
+
+    def set_hardware_text(self, text: str) -> None:
+        self.hardware_help.setText(text)
+        self.hardware_switch.setAccessibleDescription(text)
 
     def set_compact(self, compact: bool) -> None:
         for section in self.sections:

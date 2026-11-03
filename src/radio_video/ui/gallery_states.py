@@ -17,6 +17,7 @@ from PySide6.QtWidgets import QApplication, QDialog, QWidget
 
 from radio_video.ffmpeg.locator import FFmpegTools
 from radio_video.models.estimate import estimate_output_size
+from radio_video.models.hardware import NVENC, HardwareSupport
 from radio_video.models.media import MediaInfo
 from radio_video.models.presets import OUTPUT_FORMATS, OutputFormat
 from radio_video.services.preview import PreviewKind as ServiceKind
@@ -61,7 +62,13 @@ def demo_window(size: str = "l") -> MainWindow:
         str(Path(tempfile.gettempdir()) / "rv-gallery.ini"), QSettings.Format.IniFormat
     )
     links = Path("C:/Users/Ana/AppData/Local/Microsoft/WinGet/Links")
-    engine = Engine(FFmpegTools(links / "ffmpeg.exe", links / "ffprobe.exe"), ALL_ENCODERS, "7.1")
+    engine = Engine(
+        FFmpegTools(links / "ffmpeg.exe", links / "ffprobe.exe"),
+        ALL_ENCODERS,
+        "7.1",
+        hardware=HardwareSupport(NVENC, NVENC.encoders, "NVIDIA GeForce RTX 3060"),
+        hardware_checked=True,
+    )
     window = MainWindow(engine, settings=settings)
     window.output_namer = _demo_names
     window.folder_writable = lambda _folder: True

@@ -25,6 +25,7 @@ from PySide6.QtWidgets import (
 )
 
 from radio_video.ffmpeg.progress import ProgressUpdate
+from radio_video.models.conversion import ConversionSettings
 from radio_video.models.media import MediaInfo
 from radio_video.models.presets import OutputFormat, Quality
 from radio_video.services.conversion import ConversionError
@@ -77,6 +78,8 @@ class PreviewRequest:
     kind: PreviewKind
     contents: list[tuple[str, str]]
     calculated_size: int | None = None
+    # The settings to convert with; the format's own settings when not given.
+    settings: ConversionSettings | None = None
 
 
 class _Area(QFrame):
@@ -372,7 +375,7 @@ class PreviewWindow(QWidget):
         try:
             self.generator.generate(
                 request.media,
-                request.fmt.settings(request.quality),
+                request.settings or request.fmt.settings(request.quality),
                 request.fmt.extension,
                 kind,
                 request.fmt.plan(request.media),

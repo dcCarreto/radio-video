@@ -495,7 +495,8 @@ PLANNED_HISTORY = QT_TRANSLATE_NOOP(
     "RadioVideo", "History isn’t built yet. This shows how it will work."
 )
 PLANNED_SETTINGS = QT_TRANSLATE_NOOP(
-    "RadioVideo", "Settings aren’t built yet. This shows how they will work."
+    "RadioVideo",
+    "Only Performance works so far. The other settings show how they will work.",
 )
 PLANNED_ADVANCED = QT_TRANSLATE_NOOP(
     "RadioVideo", "Advanced Mode isn’t built yet. This shows how it will work."
@@ -738,6 +739,15 @@ SETTINGS_PERFORMANCE_TEXT = QT_TRANSLATE_NOOP(
 SETTINGS_HARDWARE = QT_TRANSLATE_NOOP("RadioVideo", "Use hardware acceleration when available")
 SETTINGS_HARDWARE_HELP = QT_TRANSLATE_NOOP(
     "RadioVideo", "Files may be slightly larger at the same quality."
+)
+SETTINGS_HARDWARE_DETECTED = QT_TRANSLATE_NOOP(
+    "RadioVideo",
+    "Detected: {adapter} ({technology}). Files may be slightly larger at the same quality.",
+)
+SETTINGS_HARDWARE_CHECKING = QT_TRANSLATE_NOOP("RadioVideo", "Checking your graphics card…")
+SETTINGS_HARDWARE_NONE = QT_TRANSLATE_NOOP(
+    "RadioVideo",
+    "No supported graphics card found (NVIDIA, AMD or Intel). Conversions use the processor.",
 )
 SETTINGS_TEMP = QT_TRANSLATE_NOOP("RadioVideo", "Temporary files")
 SETTINGS_TEMP_TEXT = QT_TRANSLATE_NOOP(

@@ -68,6 +68,13 @@ control over encoding parameters is planned.
   - "You'll get" card: output name and what goes into it (video, audio tracks, subtitles, cover
     art, what is left out), with an honest size estimate: calculated when the bitrate fixes it,
     measured after a preview with the same settings, otherwise "Depends on the content".
+  - Hardware encoding: MP4 and MKV video (H.264 and H.265) is encoded on the graphics card when
+    one is supported (NVIDIA NVENC, AMD AMF or Intel Quick Sync), about 2 times faster for H.264
+    and 5 times faster for H.265 on an RTX 4070 SUPER, at the same picture quality with somewhat
+    larger files. Each encoder is checked with a test encode at startup, in the background; on
+    by default and switchable in Settings. If the graphics card encoder fails, the error offers
+    to convert again with software encoding. WebM (VP9) uses fast multithreaded software
+    encoding.
   - Progress with percentage, speed and remaining time; cancel; Show in Folder after success.
   - Failures are explained in plain language (what happened, what to do) with the most likely fix
     as a button and the technical details one click away.
@@ -75,7 +82,8 @@ control over encoding parameters is planned.
     asks for confirmation.
 - Planned screens show how upcoming features will work, under a "Planned" banner: Advanced Mode
   (Video, Audio, Tracks and Output and filters, each setting explained, with a live output
-  summary; Ctrl+M switches mode), Queue, History and Settings. Their settings don't act yet.
+  summary; Ctrl+M switches mode), Queue, History and Settings. Their settings don't act yet,
+  except the hardware acceleration switch in Settings.
 - Converted preview window:
   - **Preview 15 s** converts a 15-second sample, starting a third of the way into the file, with
     the exact settings. Files of 15 seconds or less are converted entirely. **Full Preview**
@@ -97,7 +105,6 @@ control over encoding parameters is planned.
   pixel format, sample rate, channels, filters, track selection and container options.
 - Batch conversion, conversion queue and conversion history.
 - Stream copy when re-encoding is not needed.
-- Hardware acceleration detection (NVENC, Quick Sync, AMF).
 
 ## Technology Stack
 
@@ -232,6 +239,15 @@ A cumulative history of changes merged into `dev`, newest first.
 
 ### 2026-11-03
 
+- **#39 feat: encode video on the graphics card when available**: MP4 and MKV conversions
+  and previews use NVIDIA NVENC, AMD AMF or Intel Quick Sync when a test encode at startup shows
+  the encoder works, about 2 times faster for H.264 and 5 times faster for H.265 on an RTX 4070
+  SUPER at the same picture quality. The Settings switch for hardware acceleration now works
+  and names the detected graphics card, and a graphics card failure offers to convert again
+  with software encoding.
+- **#38 fix: make WebM (VP9) conversions about 8 times faster**: VP9 encoding uses
+  multithreaded rows and a faster speed setting, going from about 0.2 to 1.5 times real time at
+  1080p with practically the same quality.
 - **#33 feat: ship a Windows installer with FFmpeg**: each release now includes
   `Radio-Video-Setup-<version>.exe`, which installs without administrator rights and bundles a
   GPL build of FFmpeg 9.0 (verified against its published SHA-256 digest); the matching FFmpeg
