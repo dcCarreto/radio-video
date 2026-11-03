@@ -63,3 +63,20 @@ def test_missing_tools_raise(tmp_path: Path) -> None:
     with pytest.raises(FFmpegNotFoundError) as info:
         locate_tools(environ={"PATH": str(tmp_path)})
     assert info.value.program == "ffmpeg"
+
+
+def test_bundled_ffmpeg_is_found_next_to_the_frozen_executable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ffmpeg, ffprobe = _make_tools(tmp_path / "app" / "ffmpeg")
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    monkeypatch.setattr(sys, "executable", str(tmp_path / "app" / "radio-video.exe"))
+    tools = locate_tools(environ={"PATH": ""})
+    assert tools.ffmpeg == ffmpeg.resolve()
+    assert tools.ffprobe == ffprobe.resolve()
+
+
+def test_no_bundled_folder_when_running_from_source() -> None:
+    from radio_video.ffmpeg.locator import bundled_dirs
+
+    assert getattr(sys, "frozen", False) or bundled_dirs() == ()
