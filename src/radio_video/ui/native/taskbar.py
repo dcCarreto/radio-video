@@ -69,6 +69,8 @@ class TaskbarProgress:
         return self._pointer is not None
 
     def _create(self) -> ctypes.c_void_p | None:
+        if sys.platform != "win32":  # also tells type checkers on other platforms
+            return None
         try:
             ole32 = ctypes.WinDLL("ole32")
             pointer = ctypes.c_void_p()
@@ -90,6 +92,8 @@ class TaskbarProgress:
 
     @staticmethod
     def _call(pointer: ctypes.c_void_p, slot: int, args: list[Any]) -> int:
+        if sys.platform != "win32":
+            return -1
         vtable = ctypes.cast(pointer, ctypes.POINTER(ctypes.POINTER(ctypes.c_void_p))).contents
         argtypes: list[Any] = [ctypes.c_void_p, *(type(arg) for arg in args)]
         function = ctypes.WINFUNCTYPE(ctypes.c_long, *argtypes)(vtable[slot])
