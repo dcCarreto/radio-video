@@ -173,6 +173,26 @@ def test_mapped_encoder_speed_options_apply_to_the_main_video_only() -> None:
     assert "-cpu-used" not in args
 
 
+def test_hardware_encoders_get_their_quality_and_rate_control_options() -> None:
+    audio = AudioOptions(codec="aac", bitrate=192_000)
+    nvenc = ConversionSettings(
+        VideoOptions(codec="h264_nvenc", crf=21, preset="p4", bitrate=0, pixel_format="nv12"),
+        audio,
+    )
+    args = mapped_arguments(nvenc, StreamMap(video=0, audio=(1,)))
+    assert _option(args, "-cq:v:0") == "21"
+    assert _option(args, "-rc:v:0") == "vbr"
+    assert _option(args, "-b:v:0") == "0"
+    assert _option(args, "-preset:v:0") == "p4"
+    assert "-crf:v:0" not in args
+
+    amf = ConversionSettings(VideoOptions(codec="hevc_amf", crf=23), audio)
+    args = video_arguments(amf.video)
+    assert (_option(args, "-qp_i"), _option(args, "-qp_p")) == ("23", "23")
+    assert _option(args, "-rc") == "cqp"
+    assert "-qp_b" not in args
+
+
 def test_audio_only_mapping_puts_cover_first_and_downmixes() -> None:
     settings = ConversionSettings(video=None, audio=AudioOptions("libmp3lame", 192_000))
     args = mapped_arguments(settings, StreamMap(audio=(1,), cover_art=4, downmix_to_stereo=True))

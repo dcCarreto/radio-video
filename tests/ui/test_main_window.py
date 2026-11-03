@@ -11,10 +11,13 @@ from pytestqt.qtbot import QtBot
 
 from radio_video.ffmpeg import FFmpegNotFoundError, FFmpegTools, probe
 from radio_video.ffmpeg.capabilities import list_encoders
+from radio_video.models.conversion import ConversionJob
+from radio_video.models.hardware import NVENC, HardwareSupport
 from radio_video.models.presets import OUTPUT_FORMATS, Quality
 from radio_video.ui.demo import DEMO_MEDIA
 from radio_video.ui.dialogs.failed_dialog import FailedDialog
 from radio_video.ui.dialogs.quit_dialog import QuitDialog
+from radio_video.ui.errors_map import NextStep
 from radio_video.ui.state import Dialog, Drop, Job, PreviewKind, Progress, Screen
 from radio_video.ui.windows.main_window import Engine, MainWindow
 
@@ -292,3 +295,60 @@ def test_mode_is_locked_while_converting(demo_window: MainWindow) -> None:
     machine.conversion_started()
     demo_window.toggle_mode()
     assert machine.state.mode.value == "simple"
+
+
+NVIDIA = HardwareSupport(NVENC, NVENC.encoders, "NVIDIA GeForce RTX 4070 SUPER")
+
+
+def _started_jobs(window: MainWindow) -> list[ConversionJob]:
+    jobs: list[ConversionJob] = []
+    assert window.runner is not None
+    window.runner.start = jobs.append  # type: ignore[method-assign,assignment]
+    return jobs
+
+
+def test_hardware_encoding_is_on_by_default_and_can_be_turned_off(
+    demo_window: MainWindow, settings: QSettings
+) -> None:
+    demo_window.engine.hardware = NVIDIA
+    jobs = _started_jobs(demo_window)
+    demo_window.start_conversion()
+    assert jobs[-1].settings.video is not None
+    assert jobs[-1].settings.video.codec == "h264_nvenc"
+
+    demo_window.machine._state = demo_window.machine.state.__class__(screen=Screen.MAIN)
+    demo_window.settings_page.hardware_switch.setChecked(False)
+    assert settings.value("performance/hardwareAcceleration", type=bool) is False
+    demo_window.start_conversion()
+    assert jobs[-1].settings.video is not None
+    assert jobs[-1].settings.video.codec == "libx264"
+
+
+def test_convert_with_software_after_a_hardware_failure(demo_window: MainWindow) -> None:
+    demo_window.engine.hardware = NVIDIA
+    jobs = _started_jobs(demo_window)
+    demo_window.follow_next_step(NextStep.CONVERT_WITH_SOFTWARE)
+    assert jobs[-1].settings.video is not None
+    assert jobs[-1].settings.video.codec == "libx264"
+
+    demo_window.machine._state = demo_window.machine.state.__class__(screen=Screen.MAIN)
+    demo_window.start_conversion()
+    assert jobs[-1].settings.video is not None
+    assert jobs[-1].settings.video.codec == "h264_nvenc"
+
+
+def test_hardware_detection_runs_in_the_background(
+    qtbot: QtBot, settings: QSettings, tmp_path: Path
+) -> None:
+    tools = FFmpegTools(tmp_path / "ffmpeg.exe", tmp_path / "ffprobe.exe")
+    window = _window(
+        qtbot, Engine(tools, ALL_ENCODERS), settings, detect_hardware=lambda *_: NVIDIA
+    )
+    help_label = window.settings_page.hardware_help
+    qtbot.waitUntil(lambda: window.engine.hardware_checked, timeout=TIMEOUT_MS)
+    assert window.engine.hardware is NVIDIA
+    assert help_label.text().startswith("Detected: NVIDIA GeForce RTX 4070 SUPER (NVENC).")
+
+    window = _window(qtbot, Engine(tools, ALL_ENCODERS), settings, detect_hardware=lambda *_: None)
+    qtbot.waitUntil(lambda: window.engine.hardware_checked, timeout=TIMEOUT_MS)
+    assert window.settings_page.hardware_help.text().startswith("No supported graphics card")
