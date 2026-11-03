@@ -46,8 +46,6 @@ from radio_video.models.media import MediaInfo
 from radio_video.models.presets import OutputFormat, available_formats, format_by_key
 from radio_video.services.analysis import MediaAnalyzer
 from radio_video.services.conversion import ConversionError, ConversionRunner
-from radio_video.services.preview import PreviewKind as ServicePreviewKind
-from radio_video.services.preview import PreviewSample
 from radio_video.ui import icons, theme
 from radio_video.ui import strings as s
 from radio_video.ui import viewmodel as vm
@@ -62,7 +60,6 @@ from radio_video.ui.native.taskbar import TaskbarProgress, TaskbarState
 from radio_video.ui.pages.convert_page import ConvertPage
 from radio_video.ui.pages.convert_panel import PanelView
 from radio_video.ui.pages.start_view import make_drop_zone
-from radio_video.ui.preview_dialog import PreviewDialog
 from radio_video.ui.state import (
     Dialog,
     Drop,
@@ -85,6 +82,7 @@ from radio_video.ui.widgets.labels import label
 from radio_video.ui.widgets.painting import antialiased, fill_rounded, follow_theme
 from radio_video.ui.widgets.progress import Spinner
 from radio_video.ui.widgets.tab_strip import TabSpec, TabStrip
+from radio_video.ui.windows.preview_window import PreviewRequest, PreviewWindow
 from radio_video.utils.formatting import format_duration, format_size
 
 logger = logging.getLogger(__name__)
@@ -187,13 +185,15 @@ class MainWindow(QMainWindow):
         self.machine = StateMachine()
         self._dialog: QDialog | None = None
         self._dialog_kind: Dialog | None = None
-        self.preview_dialog: PreviewDialog | None = None
+        self.preview_window: PreviewWindow | None = None
         self._compact: bool | None = None
         self._quitting = False
         self._last_job: Job | None = None
         # Replaceable so the UI gallery can show the design's demo states without files.
         self.output_namer: Callable[[Path, MediaInfo, OutputFormat], vm.OutputName] = vm.output_name
         self.folder_writable: Callable[[Path], bool] = _writable
+        # Previews start playing when ready; tests on machines without audio turn this off.
+        self.preview_autoplay = True
 
         self.setWindowTitle(tr(s.APP_NAME))
         self.setWindowIcon(icons.app_icon())
@@ -354,6 +354,8 @@ class MainWindow(QMainWindow):
             if media is not None and state.has_file
             else tr(s.APP_NAME)
         )
+        if self.preview_window is not None:
+            self.preview_window.set_outdated(self.machine.preview_outdated())
         self._render_status(state)
         self._render_taskbar(state)
         self._render_dialog(state)
@@ -733,36 +735,47 @@ class MainWindow(QMainWindow):
         media = self.session.media
         if media is None or self.engine.tools is None:
             return
+        if self.preview_window is not None:
+            self.preview_window.close()
         if not self.machine.preview_requested(kind):
             return
-        fmt = self.current_format()
-        service_kind = (
-            ServicePreviewKind.SHORT if kind is PreviewKind.SAMPLE else ServicePreviewKind.FULL
+        state = self.machine.state
+        fmt = self.current_format(state)
+        request = PreviewRequest(
+            media=media,
+            fmt=fmt,
+            quality=state.quality,
+            kind=kind,
+            contents=vm.output_contents(fmt, media, fmt.plan(media)),
+            calculated_size=estimate_output_size(fmt.settings(state.quality), media),
         )
-        dialog = PreviewDialog(
-            self.engine.tools.ffmpeg, media, fmt, self.machine.state.quality, service_kind, self
+        window = PreviewWindow(
+            self.engine.tools.ffmpeg,
+            request,
+            compact=bool(self._compact),
+            autoplay=self.preview_autoplay,
+            parent=self,
         )
-        dialog.setModal(True)
-        generator = dialog.generator
-        generator.progress.connect(self._on_preview_progress)
-        generator.ready.connect(lambda sample: self._on_preview_ready(sample, media.duration))
-        generator.failed.connect(lambda _message: self.machine.preview_failed())
-        generator.canceled.connect(self.machine.preview_canceled)
-        dialog.finished.connect(lambda _result: self.machine.preview_closed())
-        dialog.finished.connect(dialog.deleteLater)
-        self.preview_dialog = dialog
-        dialog.show()
-        dialog.start()
+        window.progress.connect(self.machine.preview_progress)
+        window.ready.connect(self.machine.preview_ready)
+        window.failed.connect(self.machine.preview_failed)
+        window.canceled.connect(self.machine.preview_canceled)
+        window.closed.connect(lambda w=window: self._on_preview_closed(w))
+        window.retry_requested.connect(self.open_preview)
+        window.convert_requested.connect(self._convert_from_preview)
+        self.preview_window = window
+        window.show()
+        window.start()
 
-    def _on_preview_progress(self, update: ProgressUpdate) -> None:
-        dialog = self.preview_dialog
-        job = dialog.generator.runner.job if dialog is not None else None
-        fraction = update.fraction(job.expected_duration if job is not None else None)
-        if fraction is not None:
-            self.machine.preview_progress(Progress(fraction, update.speed))
+    def _on_preview_closed(self, window: PreviewWindow) -> None:
+        if window is self.preview_window:
+            self.preview_window = None
+            self.machine.preview_closed()
 
-    def _on_preview_ready(self, sample: PreviewSample, duration: float | None) -> None:
-        self.machine.preview_ready(sample.estimated_full_size(duration))
+    def _convert_from_preview(self) -> None:
+        if self.preview_window is not None:
+            self.preview_window.close()
+        self.start_conversion()
 
     # Engine
     @Slot()
@@ -800,8 +813,13 @@ class MainWindow(QMainWindow):
         if not self._quitting and not self.machine.close_requested():
             event.ignore()
             return
-        if self.preview_dialog is not None:
-            self.preview_dialog.close()
+        if not self._quitting and self.machine.state.previewing:
+            dialog = QuitDialog.for_preview(self)
+            if dialog.exec() != QDialog.DialogCode.Accepted:
+                event.ignore()
+                return
+        if self.preview_window is not None:
+            self.preview_window.close()
         if self.runner is not None and self.runner.is_running:
             self.runner.cancel()
             self.runner.wait()

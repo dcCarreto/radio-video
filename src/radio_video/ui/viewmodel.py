@@ -386,6 +386,22 @@ def output_contents(fmt: OutputFormat, media: MediaInfo, plan: StreamMap) -> lis
     return rows + [row for row in tail if row is not None]
 
 
+def output_track_text(fmt: OutputFormat, media: MediaInfo, plan: StreamMap) -> str:
+    """The audio track as it sounds in the output: "Track 1 (Portuguese), stereo"."""
+    if not plan.audio:
+        return ""
+    track = next(st for st in media.streams if st.index == plan.audio[0])
+    number = [a.index for a in media.audio_streams].index(track.index) + 1
+    language = language_name(track.language)
+    name = (
+        tr(s.CONTENT_TRACK_LANGUAGE).format(number=number, language=language)
+        if language != NO_VALUE
+        else tr(s.CONTENT_TRACK).format(number=number)
+    )
+    layout = tr(s.DETAIL_STEREO) if plan.downmix_to_stereo else layout_name(track)
+    return tr(s.CONTENT_LAYOUT).format(track=name, layout=layout.lower())
+
+
 def _sentence(items: list[str]) -> str:
     text = tr(s.LIST_SEPARATOR).join(items)
     return text[:1].upper() + text[1:]

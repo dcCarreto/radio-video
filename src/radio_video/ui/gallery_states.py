@@ -8,23 +8,27 @@ from __future__ import annotations
 
 import tempfile
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 from PySide6.QtCore import QPoint, QSettings, QSize
-from PySide6.QtGui import QPainter, QPixmap
+from PySide6.QtGui import QColor, QImage, QLinearGradient, QPainter, QPixmap
 from PySide6.QtWidgets import QApplication, QDialog, QWidget
 
 from radio_video.ffmpeg.locator import FFmpegTools
+from radio_video.models.estimate import estimate_output_size
 from radio_video.models.media import MediaInfo
 from radio_video.models.presets import OUTPUT_FORMATS, OutputFormat
+from radio_video.services.preview import PreviewKind as ServiceKind
+from radio_video.services.preview import PreviewSample
 from radio_video.ui import viewmodel as vm
 from radio_video.ui.demo import DEMO_FOLDER, DEMO_MEDIA
 from radio_video.ui.dialogs.failed_dialog import FailedDialog
 from radio_video.ui.errors_map import Failure
 from radio_video.ui.state import PreviewKind, Progress, UiState
 from radio_video.ui.widgets.drop_zone import DropState
-from radio_video.ui.windows.main_window import Engine, MainWindow
+from radio_video.ui.windows.main_window import COMPACT_BELOW, Engine, MainWindow
+from radio_video.ui.windows.preview_window import Phase, PreviewRequest, PreviewWindow
 
 # Client sizes: the design's 1440×900 and 960×720 frames include a 32 px title bar.
 SIZES = {"l": QSize(1440, 868), "s": QSize(960, 688)}
@@ -139,6 +143,77 @@ def _about(window: MainWindow) -> None:
     window.machine.show_about()
 
 
+PREVIEW_LOG = (
+    "[h264 @ 0000020a] Invalid NAL unit size (1835 > 1214).\n"
+    "[h264 @ 0000020a] Error splitting the input into NAL units.\n"
+    "Error while decoding stream #0:0: Invalid data found when processing input"
+)
+
+
+def _demo_frame() -> QImage:
+    """A neutral gradient standing in for a converted video frame."""
+    image = QImage(1920, 1080, QImage.Format.Format_RGB32)
+    painter = QPainter(image)
+    gradient = QLinearGradient(0, 0, 1920, 1080)
+    gradient.setColorAt(0, QColor("#2b3a42"))
+    gradient.setColorAt(1, QColor("#7a5c3e"))
+    painter.fillRect(image.rect(), gradient)
+    painter.end()
+    return image
+
+
+def _preview(phase: Phase, key: str = "mp4-h264") -> Callable[[MainWindow], None]:
+    def apply(window: MainWindow) -> None:
+        _loaded(window)
+        if key != "mp4-h264":
+            window.convert_page.file.panel.format.set_current_key(key)
+        machine = window.machine
+        machine.preview_requested(PreviewKind.SAMPLE)
+        state = machine.state
+        fmt = window.current_format(state)
+        request = PreviewRequest(
+            DEMO_MEDIA,
+            fmt,
+            state.quality,
+            PreviewKind.SAMPLE,
+            vm.output_contents(fmt, DEMO_MEDIA, fmt.plan(DEMO_MEDIA)),
+            estimate_output_size(fmt.settings(state.quality), DEMO_MEDIA),
+        )
+        compact = window.width() < COMPACT_BELOW
+        preview = PreviewWindow(
+            Path("ffmpeg.exe"), request, compact=compact, autoplay=False, parent=window
+        )
+        if phase is Phase.READY:
+            measured = 22 * MB
+            preview._sample = PreviewSample(
+                Path("preview.mp4"), ServiceKind.SHORT, 20.0, 15.0, round(measured * 15 / 133)
+            )
+            preview.canvas.show_image(_demo_frame())
+            preview.player_bar.set_duration(15_000)
+            preview.player_bar.set_position(4_000)
+            machine.preview_ready(measured)
+            preview._set_phase(phase)
+        elif phase is Phase.FAILED:
+            preview._last_time = 4.0
+            source = Path(tempfile.gettempdir()) / "rv-gallery-source.mkv"
+            source.touch()
+            preview.request = replace(request, media=replace(DEMO_MEDIA, path=source))
+            preview._show_failure(PREVIEW_LOG)
+            preview.request = request
+            machine.preview_failed()
+        elif phase is Phase.CANCELED:
+            preview._set_phase(phase)
+            machine.preview_canceled()
+        else:
+            preview.card_bar.set_fraction(0.64)
+            preview.card_progress.setText(vm.progress_detail(Progress(0.64, None, 2)))
+            machine.preview_progress(Progress(0.64))
+        window.preview_window = preview
+        preview.show()
+
+    return apply
+
+
 @dataclass(frozen=True)
 class GalleryState:
     key: str
@@ -163,6 +238,11 @@ STATES = (
     GalleryState("success", "Finished", _success),
     GalleryState("canceled", "Canceled", _canceled),
     GalleryState("failed", "Failed: dialog with details", _failed),
+    GalleryState("pv-creating", "Preview: creating", _preview(Phase.CREATING)),
+    GalleryState("pv-ready", "Preview: ready (video)", _preview(Phase.READY)),
+    GalleryState("pv-audio", "Preview: audio only", _preview(Phase.READY, "mp3")),
+    GalleryState("pv-failed", "Preview: failed", _preview(Phase.FAILED)),
+    GalleryState("pv-canceled", "Preview: canceled", _preview(Phase.CANCELED)),
     GalleryState("quit", "Quit during conversion", _quit),
     GalleryState("about", "About", _about),
 )
@@ -189,13 +269,16 @@ def capture(window: MainWindow) -> QPixmap:
     dialog = window.open_dialog
     if isinstance(dialog, QDialog) and dialog.isVisible():
         overlays.append(dialog)
+    preview = window.preview_window
+    if preview is not None and preview.isVisible():
+        overlays.append(preview)
     combo = window.convert_page.file.panel.format
     popup = combo.view().window()
     if popup.isVisible():
         overlays.append(popup)
     for widget in overlays:
         top_left = window.mapFromGlobal(widget.mapToGlobal(QPoint(0, 0)))
-        if widget is dialog:
+        if widget is dialog or widget is preview:
             top_left = QPoint(
                 (image.width() - widget.width()) // 2, (image.height() - widget.height()) // 2
             )
