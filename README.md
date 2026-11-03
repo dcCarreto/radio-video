@@ -239,6 +239,15 @@ A cumulative history of changes merged into `dev`, newest first.
 
 ### 2026-11-03
 
+- **#39 feat: encode video on the graphics card when available**: MP4 and MKV conversions
+  and previews use NVIDIA NVENC, AMD AMF or Intel Quick Sync when a test encode at startup shows
+  the encoder works, about 2 times faster for H.264 and 5 times faster for H.265 on an RTX 4070
+  SUPER at the same picture quality. The Settings switch for hardware acceleration now works
+  and names the detected graphics card, and a graphics card failure offers to convert again
+  with software encoding.
+- **#38 fix: make WebM (VP9) conversions about 8 times faster**: VP9 encoding uses
+  multithreaded rows and a faster speed setting, going from about 0.2 to 1.5 times real time at
+  1080p with practically the same quality.
 - **#33 feat: ship a Windows installer with FFmpeg**: each release now includes
   `Radio-Video-Setup-<version>.exe`, which installs without administrator rights and bundles a
   GPL build of FFmpeg 9.0 (verified against its published SHA-256 digest); the matching FFmpeg
