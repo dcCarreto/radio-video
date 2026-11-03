@@ -6,7 +6,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from PySide6.QtCore import QRectF, Qt, Signal
-from PySide6.QtGui import QPaintEvent
+from PySide6.QtGui import QPaintEvent, QResizeEvent
 from PySide6.QtWidgets import (
     QFrame,
     QGridLayout,
@@ -23,6 +23,7 @@ from radio_video.models.presets import Quality
 from radio_video.ui import strings as s
 from radio_video.ui import theme
 from radio_video.ui import viewmodel as vm
+from radio_video.ui.pages.advanced_panel import AdvancedPanel
 from radio_video.ui.state import Job, Mode, PreviewKind
 from radio_video.ui.strings import tr
 from radio_video.ui.theme import fonts
@@ -35,9 +36,12 @@ from radio_video.ui.widgets.labels import ElidedLabel, kicker, label
 from radio_video.ui.widgets.painting import antialiased, follow_theme
 from radio_video.ui.widgets.progress import ProgressBlock, ProgressState, StatusIcon
 from radio_video.ui.widgets.segmented import SegmentedControl, SegmentOption
+from radio_video.ui.widgets.stack import fit_stack_height
 
 PANEL_WIDTH = 440
 PANEL_WIDTH_COMPACT = 380
+PANEL_WIDTH_ADVANCED = 620
+PANEL_WIDTH_ADVANCED_COMPACT = 460
 PANEL_MIN_WIDTH = 360
 PANEL_MAX_WIDTH = 720
 POPUP_MAX_HEIGHT = 520
@@ -66,6 +70,7 @@ class PanelView:
     speed_tip: str = ""
     result_title: str = ""
     result_text: str = ""
+    summary: str = ""
 
     @property
     def locked(self) -> bool:
@@ -185,6 +190,7 @@ class ConvertPanel(QFrame):
         self.setMaximumWidth(PANEL_MAX_WIDTH)
         self._groups: list[FormatGroup] | None = None
         self._compact = False
+        self._advanced = False
 
         # Mode
         self.mode = SegmentedControl(
@@ -283,6 +289,14 @@ class ConvertPanel(QFrame):
         idle_layout = QVBoxLayout(idle)
         idle_layout.setContentsMargins(0, 0, 0, 0)
         idle_layout.setSpacing(10)
+        self.summary = QWidget()
+        summary_layout = QVBoxLayout(self.summary)
+        summary_layout.setContentsMargins(0, 0, 0, 0)
+        summary_layout.setSpacing(4)
+        summary_layout.addWidget(kicker(tr(s.ADV_SUMMARY)))
+        self.summary_text = label("", TextStyle.MONO_SMALL, wrap=True)
+        summary_layout.addWidget(self.summary_text)
+        idle_layout.addWidget(self.summary)
         idle_layout.addLayout(_pair(self.preview_short, self.preview_full))
         idle_layout.addWidget(self.preview_help)
         idle_layout.addWidget(self.convert)
@@ -331,7 +345,11 @@ class ConvertPanel(QFrame):
         layout.setSpacing(0)
         layout.addWidget(self.top)
         layout.addWidget(Rule(hairline=True))
-        layout.addWidget(scroll, 1)
+        self.advanced = AdvancedPanel()
+        self.bodies = QStackedWidget()
+        self.bodies.addWidget(scroll)
+        self.bodies.addWidget(self.advanced)
+        layout.addWidget(self.bodies, 1)
         layout.addWidget(self.footer)
         self._job = Job.IDLE
         self._fit_footer()
@@ -343,6 +361,13 @@ class ConvertPanel(QFrame):
         self._job = view.job
         locked = view.locked
         self.mode.set_value(view.mode.value)
+        advanced = view.mode is Mode.ADVANCED
+        self._advanced = advanced
+        self.bodies.setCurrentIndex(1 if advanced else 0)
+        self.summary.setVisible(advanced)
+        self.summary_text.setText(view.summary)
+        self._fit_footer()
+        self.preview_help.setVisible(not advanced and not self._compact)
         self.mode_help.setText(
             tr(s.MODE_SIMPLE_HELP if view.mode is Mode.SIMPLE else s.MODE_ADVANCED_HELP)
         )
@@ -415,14 +440,11 @@ class ConvertPanel(QFrame):
 
     def _fit_footer(self, _index: int = 0) -> None:
         """Size the footer to the current page, not the tallest one."""
-        current = self.footer_pages.currentWidget()
-        for index in range(self.footer_pages.count()):
-            page = self.footer_pages.widget(index)
-            if page is None:
-                continue
-            policy = QSizePolicy.Policy.Preferred if page is current else QSizePolicy.Policy.Ignored
-            page.setSizePolicy(QSizePolicy.Policy.Preferred, policy)
-        self.footer_pages.adjustSize()
+        fit_stack_height(self.footer_pages)
+
+    def resizeEvent(self, event: QResizeEvent) -> None:  # noqa: N802
+        super().resizeEvent(event)
+        self._fit_footer()
 
     def _on_result_primary(self) -> None:
         if self._job is Job.SUCCESS:
@@ -445,7 +467,8 @@ class ConvertPanel(QFrame):
         self.fields.setContentsMargins(side, 20, side, 20)
         self.fields.setSpacing(16 if compact else 20)
         self.footer_layout.setContentsMargins(side, 16, side, 20)
-        self.preview_help.setVisible(not compact)
+        self.preview_help.setVisible(not compact and not self._advanced)
+        self.advanced.set_compact(compact)
         self.preview_short.set_shortcut_hint(None if compact else tr(s.SHORTCUT_PREVIEW))
         self.format.max_popup_height = POPUP_MAX_HEIGHT_COMPACT if compact else POPUP_MAX_HEIGHT
 

@@ -267,3 +267,28 @@ def test_preview_measures_size(
     preview.close()
     assert window.preview_window is None
     assert window.machine.state.preview is None
+
+
+def test_advanced_mode_shows_planned_panel_with_summary(demo_window: MainWindow) -> None:
+    demo_window.toggle_mode()
+    state = demo_window.machine.state
+    assert state.mode.value == "advanced"
+    panel = demo_window.convert_page.file.panel
+    assert panel.bodies.currentWidget() is panel.advanced
+    assert panel.summary.isVisibleTo(panel)
+    summary = panel.summary_text.text()
+    assert summary.startswith("MP4 · H.264 x264 CRF 23 medium · 1920×1080")
+    assert "3 × AAC 192 kb/s" in summary
+    assert demo_window.mode_label.text() == "Advanced Mode"
+    assert panel.convert.isEnabled()
+    demo_window.toggle_mode()
+    assert panel.bodies.currentIndex() == 0
+    assert not panel.summary.isVisibleTo(panel)
+
+
+def test_mode_is_locked_while_converting(demo_window: MainWindow) -> None:
+    machine = demo_window.machine
+    machine.conversion_requested()
+    machine.conversion_started()
+    demo_window.toggle_mode()
+    assert machine.state.mode.value == "simple"

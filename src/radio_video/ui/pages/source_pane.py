@@ -15,6 +15,7 @@ from radio_video.ui.theme.fonts import TextStyle
 from radio_video.ui.widgets.badge import Badge
 from radio_video.ui.widgets.button import Button
 from radio_video.ui.widgets.facts_grid import FactsGrid
+from radio_video.ui.widgets.flow_layout import FlowLayout
 from radio_video.ui.widgets.labels import ElidedLabel, kicker, label
 from radio_video.ui.widgets.painting import antialiased, follow_theme
 from radio_video.ui.widgets.streams_table import StreamsTable
@@ -59,14 +60,11 @@ class SourcePane(QWidget):
         )
 
         self.inside = kicker("", tone=None)
-        self.chips = QHBoxLayout()
-        self.chips.setSpacing(12)
-        section = QHBoxLayout()
-        section.setContentsMargins(24, 16, 24, 8)
-        section.setSpacing(12)
-        section.addWidget(self.inside)
-        section.addLayout(self.chips)
-        section.addStretch()
+        # The header and chips wrap like text, so narrow panes don't force a minimum width.
+        self.section = FlowLayout(spacing=12, line_spacing=8)
+        self.section.setContentsMargins(24, 16, 24, 8)
+        self.section.addWidget(self.inside)
+        self.chips: list[Badge] = []
 
         self.table = StreamsTable([tr(c) for c in s.STREAM_COLUMNS])
         self.table.delegate.default_text = tr(s.BADGE_DEFAULT)
@@ -79,7 +77,7 @@ class SourcePane(QWidget):
         layout.setSpacing(0)
         layout.addLayout(header)
         layout.addWidget(self.facts)
-        layout.addLayout(section)
+        layout.addLayout(self.section)
         layout.addLayout(table_box, 1)
         follow_theme(self)
 
@@ -89,13 +87,12 @@ class SourcePane(QWidget):
         values, title = vm.facts(media)
         self.facts.set_values(values, title)
         self.inside.setText(vm.inside_header(media))
-        while self.chips.count():
-            item = self.chips.takeAt(0)
-            widget = item.widget() if item is not None else None
-            if widget is not None:
-                widget.deleteLater()
-        for icon, text in vm.track_chips(media):
-            self.chips.addWidget(Badge(text, icon=icon))
+        for chip in self.chips:
+            self.section.removeWidget(chip)
+            chip.deleteLater()
+        self.chips = [Badge(text, icon=icon) for icon, text in vm.track_chips(media)]
+        for chip in self.chips:
+            self.section.addWidget(chip)
         self.table.set_rows(vm.stream_rows(media))
 
     def set_converting(self, converting: bool) -> None:

@@ -267,3 +267,42 @@ class PlannedBanner(QFrame):
         p = theme.palette()
         painter.fillRect(self.rect(), p.warning_tint)
         painter.fillRect(QRectF(0, self.height() - 1, self.width(), 1), p.border)
+
+
+class ComboFace(QWidget):
+    """Read-only picture of a combo box, for planned screens whose settings don't work yet."""
+
+    def __init__(self, text: str, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._text = text
+        self.setFixedHeight(32)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.setFont(fonts.font(TextStyle.BODY))
+        self.setToolTip(text)
+        self.setAccessibleName(text)
+        follow_theme(self)
+
+    def sizeHint(self) -> QSize:  # noqa: N802
+        return QSize(160, 32)
+
+    def minimumSizeHint(self) -> QSize:  # noqa: N802
+        return QSize(80, 32)
+
+    def paintEvent(self, event: QPaintEvent) -> None:  # noqa: N802
+        painter = antialiased(self)
+        p = theme.palette()
+        fill_rounded(painter, QRectF(self.rect()), 4, p.raised, p.border_ctl)
+        painter.setPen(p.text)
+        painter.setFont(self.font())
+        width = self.width() - 10 - 16 - 18
+        painter.drawText(
+            QRectF(10, 0, width, self.height()),
+            int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter),
+            elide(self.font(), self._text, Qt.TextElideMode.ElideRight, width),
+        )
+        icons.paint_icon(
+            painter,
+            QRectF(self.width() - 26, (self.height() - 16) / 2, 16, 16),
+            "ChevronDown",
+            p.text,
+        )

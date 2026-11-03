@@ -17,6 +17,7 @@ from PySide6.QtGui import (
     QDragMoveEvent,
     QDropEvent,
     QPaintEvent,
+    QResizeEvent,
 )
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QSizePolicy, QStackedWidget, QVBoxLayout, QWidget
 
@@ -27,6 +28,7 @@ from radio_video.ui.widgets.button import Button, ButtonKind, ButtonSize
 from radio_video.ui.widgets.labels import label
 from radio_video.ui.widgets.painting import antialiased, fill_rounded, follow_theme
 from radio_video.ui.widgets.progress import ProgressBar
+from radio_video.ui.widgets.stack import fit_stack_height
 
 
 class DropState(Enum):
@@ -164,6 +166,7 @@ class DropZone(QFrame):
         layout.addWidget(self.title)
         layout.addWidget(self.details)
         follow_theme(self)
+        self.set_state(DropState.IDLE)
 
     @property
     def state(self) -> DropState:
@@ -176,12 +179,17 @@ class DropZone(QFrame):
         if state is DropState.BLOCKED:
             self.blocked_text.setText(reason)
         self.details.setCurrentIndex(list(DropState).index(state))
+        fit_stack_height(self.details)
         self.setAccessibleDescription(
             f"{self._titles[state]}. {reason}" if reason else self._titles[state]
         )
         self.tile.update()
         self.update()
         self.state_changed.emit(state)
+
+    def resizeEvent(self, event: QResizeEvent) -> None:  # noqa: N802
+        super().resizeEvent(event)
+        fit_stack_height(self.details)
 
     def dragEnterEvent(self, event: QDragEnterEvent) -> None:  # noqa: N802
         if not event.mimeData().hasUrls():

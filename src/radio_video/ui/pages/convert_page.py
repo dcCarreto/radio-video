@@ -15,7 +15,13 @@ from PySide6.QtWidgets import (
 
 from radio_video.ui import strings as s
 from radio_video.ui import theme
-from radio_video.ui.pages.convert_panel import PANEL_WIDTH, PANEL_WIDTH_COMPACT, ConvertPanel
+from radio_video.ui.pages.convert_panel import (
+    PANEL_WIDTH,
+    PANEL_WIDTH_ADVANCED,
+    PANEL_WIDTH_ADVANCED_COMPACT,
+    PANEL_WIDTH_COMPACT,
+    ConvertPanel,
+)
 from radio_video.ui.pages.missing_view import EngineMissingView
 from radio_video.ui.pages.source_pane import SourcePane
 from radio_video.ui.pages.start_view import StartView
@@ -33,6 +39,8 @@ class FileView(QWidget):
 
     def __init__(self, overlay: DropZone, parent: QWidget | None = None) -> None:
         super().__init__(parent)
+        self._compact = False
+        self._advanced = False
         self.source = SourcePane()
         self.panel = ConvertPanel()
         self.splitter = QSplitter(Qt.Orientation.Horizontal)
@@ -79,9 +87,22 @@ class FileView(QWidget):
         self.splitter.setSizes([total - width - SPLITTER_HANDLE, width])
 
     def set_compact(self, compact: bool) -> None:
+        self._compact = compact
         self.source.set_compact(compact)
         self.panel.set_compact(compact)
-        self.set_panel_width(PANEL_WIDTH_COMPACT if compact else PANEL_WIDTH)
+        self._fit_panel()
+
+    def set_advanced(self, advanced: bool) -> None:
+        if advanced != self._advanced:
+            self._advanced = advanced
+            self._fit_panel()
+
+    def _fit_panel(self) -> None:
+        if self._advanced:
+            width = PANEL_WIDTH_ADVANCED_COMPACT if self._compact else PANEL_WIDTH_ADVANCED
+        else:
+            width = PANEL_WIDTH_COMPACT if self._compact else PANEL_WIDTH
+        self.set_panel_width(width)
 
 
 class ConvertPage(QWidget):
