@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import os
 import sys
@@ -11,7 +12,19 @@ from dataclasses import dataclass, field
 from functools import partial
 from pathlib import Path
 
-from PySide6.QtCore import QProcess, QRectF, QSettings, QStandardPaths, Qt, QUrl, Slot
+from PySide6.QtCore import (
+    QProcess,
+    QRectF,
+    QRunnable,
+    QSettings,
+    QStandardPaths,
+    Qt,
+    QThreadPool,
+    QUrl,
+    Signal,
+    SignalInstance,
+    Slot,
+)
 from PySide6.QtGui import (
     QAction,
     QCloseEvent,
@@ -40,10 +53,11 @@ from PySide6.QtWidgets import (
 from radio_video.ffmpeg.capabilities import CapabilityError, ffmpeg_version, list_encoders
 from radio_video.ffmpeg.locator import FFmpegNotFoundError, FFmpegTools, locate_tools
 from radio_video.ffmpeg.progress import ProgressUpdate
-from radio_video.models.conversion import ConversionJob
+from radio_video.models.conversion import ConversionJob, ConversionSettings
 from radio_video.models.estimate import estimate_output_size
+from radio_video.models.hardware import HardwareSupport, accelerate
 from radio_video.models.media import MediaInfo
-from radio_video.models.presets import OutputFormat, available_formats, format_by_key
+from radio_video.models.presets import OutputFormat, Quality, available_formats, format_by_key
 from radio_video.services.analysis import MediaAnalyzer
 from radio_video.services.conversion import ConversionError, ConversionRunner
 from radio_video.ui import icons, theme
@@ -95,6 +109,7 @@ DEFAULT_SIZE = (1440, 868)
 STATUS_HEIGHT = 26
 STATUS_MESSAGE_MS = 5000
 LAST_FOLDER_KEY = "convert/lastFolder"
+HARDWARE_KEY = "performance/hardwareAcceleration"
 PAGE_INDEX = {Page.CONVERT: 0, Page.QUEUE: 1, Page.HISTORY: 2, Page.SETTINGS: 3}
 
 
@@ -105,10 +120,44 @@ class Engine:
     tools: FFmpegTools | None
     encoders: frozenset[str] = frozenset()
     version: str | None = None
+    hardware: HardwareSupport | None = None
+    hardware_checked: bool = False
 
     @property
     def available(self) -> bool:
         return self.tools is not None
+
+
+HardwareDetector = Callable[[Path, frozenset[str]], HardwareSupport | None]
+
+
+class _HardwareTask(QRunnable):
+    """Runs the hardware test encodes off the UI thread."""
+
+    def __init__(
+        self,
+        found: SignalInstance,
+        request: int,
+        detect: HardwareDetector,
+        ffmpeg: Path,
+        encoders: frozenset[str],
+    ) -> None:
+        super().__init__()
+        self._found = found
+        self._request = request
+        self._detect = detect
+        self._ffmpeg = ffmpeg
+        self._encoders = encoders
+
+    def run(self) -> None:
+        try:
+            support = self._detect(self._ffmpeg, self._encoders)
+        except Exception:
+            logger.exception("Hardware encoder detection failed")
+            support = None
+        # RuntimeError: the window closed while the test encodes ran.
+        with contextlib.suppress(RuntimeError):
+            self._found.emit(self._request, support)
 
 
 @dataclass
@@ -157,18 +206,25 @@ class _StatusItem(QWidget):
 
 
 class MainWindow(QMainWindow):
+    _hardware_found = Signal(int, object)
+
     def __init__(
         self,
         engine: Engine,
         *,
         settings: QSettings | None = None,
         locate: Callable[[], FFmpegTools] = locate_tools,
+        detect_hardware: HardwareDetector | None = None,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self.engine = engine
         self.settings = settings or QSettings()
         self._locate = locate
+        self._detect_hardware = detect_hardware
+        self._hardware_request = 0
+        # Set by "Convert with Software" after the graphics card encoder failed.
+        self._software_next = False
         self.session = _Session()
         self.machine = StateMachine()
         self._dialog: QDialog | None = None
@@ -198,6 +254,8 @@ class MainWindow(QMainWindow):
         self.taskbar = TaskbarProgress(self)
         self.notifier = Notifier(self)
         self.notifier.activated.connect(self._bring_to_front)
+        self._hardware_found.connect(self._on_hardware_found)
+        self._start_hardware_detection()
 
         self.machine.subscribe(self._render)
         if not engine.available:
@@ -258,7 +316,10 @@ class MainWindow(QMainWindow):
         self.pages.addWidget(self.convert_page)
         self.queue_page = QueuePage()
         self.history_page = HistoryPage()
-        self.settings_page = SettingsPage(self.engine.tools, self.engine.version)
+        self.settings_page = SettingsPage(
+            self.engine.tools, self.engine.version, hardware_enabled=self.hardware_enabled
+        )
+        self.settings_page.hardware_changed.connect(self._on_hardware_changed)
         for planned in (self.queue_page, self.history_page, self.settings_page):
             self.pages.addWidget(planned)
 
@@ -522,7 +583,10 @@ class MainWindow(QMainWindow):
             combo = self.convert_page.file.panel.format
             combo.setFocus(Qt.FocusReason.OtherFocusReason)
             combo.showPopup()
-        elif step in (NextStep.TRY_AGAIN, NextStep.CONVERT_WITH_SOFTWARE):
+        elif step is NextStep.CONVERT_WITH_SOFTWARE:
+            self._software_next = True
+            self.start_conversion()
+        elif step is NextStep.TRY_AGAIN:
             self.start_conversion()
 
     # Settings
@@ -649,6 +713,7 @@ class MainWindow(QMainWindow):
     # Conversion
     @Slot()
     def start_conversion(self) -> None:
+        software, self._software_next = self._software_next, False
         media = self.session.media
         if media is None or self.runner is None:
             return
@@ -668,7 +733,7 @@ class MainWindow(QMainWindow):
             job = ConversionJob(
                 source=media.path,
                 destination=name.path,
-                settings=fmt.settings(state.quality),
+                settings=self.conversion_settings(fmt, state.quality, software=software),
                 duration=media.duration,
                 streams=fmt.plan(media),
             )
@@ -746,6 +811,7 @@ class MainWindow(QMainWindow):
             kind=kind,
             contents=vm.output_contents(fmt, media, fmt.plan(media)),
             calculated_size=estimate_output_size(fmt.settings(state.quality), media),
+            settings=self.conversion_settings(fmt, state.quality),
         )
         window = PreviewWindow(
             self.engine.tools.ffmpeg,
@@ -789,7 +855,64 @@ class MainWindow(QMainWindow):
             encoders = frozenset()
         self.engine = Engine(tools, encoders, ffmpeg_version(tools.ffmpeg))
         self._create_services()
+        self._start_hardware_detection()
         self.machine.engine_found()
+
+    # Hardware encoding
+    @property
+    def hardware_enabled(self) -> bool:
+        return bool(self.settings.value(HARDWARE_KEY, True, type=bool))
+
+    def conversion_settings(
+        self, fmt: OutputFormat, quality: Quality, *, software: bool = False
+    ) -> ConversionSettings:
+        """The format's settings, with the video on the graphics card when that is on."""
+        settings = fmt.settings(quality)
+        if software or not self.hardware_enabled:
+            return settings
+        return accelerate(settings, self.engine.hardware)
+
+    def hardware_text(self) -> str:
+        support = self.engine.hardware
+        if support is not None:
+            adapter = support.adapter or support.family.vendors[0]
+            return tr(s.SETTINGS_HARDWARE_DETECTED).format(
+                adapter=adapter, technology=support.technology
+            )
+        if not self.engine.hardware_checked:
+            return tr(s.SETTINGS_HARDWARE_CHECKING)
+        return tr(s.SETTINGS_HARDWARE_NONE)
+
+    def _start_hardware_detection(self) -> None:
+        self._hardware_request += 1
+        tools = self.engine.tools
+        detect = self._detect_hardware
+        if tools is None or detect is None or self.engine.hardware_checked:
+            self.engine.hardware_checked = True
+            self.settings_page.set_hardware_text(self.hardware_text())
+            return
+        self.settings_page.set_hardware_text(self.hardware_text())
+        QThreadPool.globalInstance().start(
+            _HardwareTask(
+                self._hardware_found,
+                self._hardware_request,
+                detect,
+                tools.ffmpeg,
+                self.engine.encoders,
+            )
+        )
+
+    @Slot(int, object)
+    def _on_hardware_found(self, request: int, support: HardwareSupport | None) -> None:
+        if request != self._hardware_request:
+            return
+        self.engine.hardware = support
+        self.engine.hardware_checked = True
+        self.settings_page.set_hardware_text(self.hardware_text())
+
+    @Slot(bool)
+    def _on_hardware_changed(self, enabled: bool) -> None:
+        self.settings.setValue(HARDWARE_KEY, enabled)
 
     # Keyboard
     def _on_escape(self) -> None:
