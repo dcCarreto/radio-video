@@ -36,6 +36,7 @@ from radio_video.ui.widgets.labels import ElidedLabel, kicker, label
 from radio_video.ui.widgets.painting import antialiased, follow_theme
 from radio_video.ui.widgets.progress import ProgressBlock, ProgressState, StatusIcon
 from radio_video.ui.widgets.segmented import SegmentedControl, SegmentOption
+from radio_video.ui.widgets.stack import fit_stack_height
 
 PANEL_WIDTH = 440
 PANEL_WIDTH_COMPACT = 380
@@ -439,20 +440,7 @@ class ConvertPanel(QFrame):
 
     def _fit_footer(self, _index: int = 0) -> None:
         """Size the footer to the current page, not the tallest one."""
-        current = self.footer_pages.currentWidget()
-        for index in range(self.footer_pages.count()):
-            page = self.footer_pages.widget(index)
-            if page is None:
-                continue
-            policy = QSizePolicy.Policy.Preferred if page is current else QSizePolicy.Policy.Ignored
-            page.setSizePolicy(QSizePolicy.Policy.Preferred, policy)
-        # Wrapped text (the Advanced summary) needs its height for the actual width.
-        layout = current.layout() if current is not None else None
-        width = self.footer_pages.width()
-        if layout is not None and layout.hasHeightForWidth() and width > 0:
-            self.footer_pages.setFixedHeight(layout.heightForWidth(width))
-        elif current is not None:
-            self.footer_pages.setFixedHeight(current.sizeHint().height())
+        fit_stack_height(self.footer_pages)
 
     def resizeEvent(self, event: QResizeEvent) -> None:  # noqa: N802
         super().resizeEvent(event)
