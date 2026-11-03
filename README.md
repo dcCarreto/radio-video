@@ -69,7 +69,9 @@ control over encoding parameters is planned.
     as a button and the technical details one click away.
   - Settings and opening other files are locked while a conversion runs, and closing the window
     asks for confirmation.
-- Queue, History and Settings appear as planned tabs.
+- Planned screens show how upcoming features will work, under a "Planned" banner: Advanced Mode
+  (Video, Audio, Tracks and Output and filters, each setting explained, with a live output
+  summary; Ctrl+M switches mode), Queue, History and Settings. Their settings don't act yet.
 - Converted preview window:
   - **Preview 15 s** converts a 15-second sample, starting a third of the way into the file, with
     the exact settings. Files of 15 seconds or less are converted entirely. **Full Preview**
