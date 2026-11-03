@@ -70,14 +70,20 @@ control over encoding parameters is planned.
   - Settings and opening other files are locked while a conversion runs, and closing the window
     asks for confirmation.
 - Queue, History and Settings appear as planned tabs.
-- Preview player:
-  - **Short preview** converts a 15-second sample, starting a third of the way into the file, with
-    the selected format and quality. Files of 15 seconds or less are converted entirely.
-  - **Full preview** converts the whole file to a temporary location.
-  - Previews are always the converted output, never the original file. They play in a
-    playback-only player (play/pause, seek, volume) and are deleted when the preview is closed.
-  - A short preview measures the real output size and extrapolates it to the full file, which
-    gives a size estimate for quality-based formats.
+- Converted preview window:
+  - **Preview 15 s** converts a 15-second sample, starting a third of the way into the file, with
+    the exact settings. Files of 15 seconds or less are converted entirely. **Full Preview**
+    converts the whole file without saving it.
+  - The window always says it shows the converted output, never the original: a "Converted
+    preview" badge stays on the picture. Audio previews show the track as it sounds in the
+    output.
+  - Playback-only controls (play/pause, seek, mute, volume) with Space/K, Left/Right, M and Esc;
+    Ctrl+Enter converts the full file with the same settings.
+  - A side panel shows the part previewed, the preview size, the estimated full size (measured
+    from the preview, or calculated from the bitrate) and the settings used.
+  - If the settings change while the window is open, it offers to update the preview. Failures
+    say where reading stopped when the source is damaged. Preview files are deleted when the
+    window closes.
 
 ## Planned Features
 
