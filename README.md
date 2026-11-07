@@ -276,6 +276,10 @@ A cumulative history of changes merged into `dev`, newest first.
 
 ### 2026-11-07
 
+- **#51 feat: keep a history of conversions**: the History tab lists the latest 100 conversions
+  from the Convert tab and the queue, stored only on this computer, with the result, size and
+  time taken. Saved files can be opened or shown in their folder, failures show what happened,
+  and files moved since show as such. Clear History asks first and keeps the converted files.
 - **#49 feat: convert many files with the queue**: the Queue tab converts files one after
   another, each with its own format, quality and Advanced choices. Add files with Add Files…,
   by dropping several files on the window, or with Add to Queue on the Convert tab; start,
