@@ -26,13 +26,14 @@ from radio_video.services.history import HistoryRecord, HistoryResult
 from radio_video.services.preview import PreviewKind as ServiceKind
 from radio_video.services.preview import PreviewSample
 from radio_video.services.queue import QueueStatus
+from radio_video.services.updates import Update
 from radio_video.ui import viewmodel as vm
 from radio_video.ui.demo import DEMO_FOLDER, DEMO_MEDIA
 from radio_video.ui.dialogs.failed_dialog import FailedDialog
 from radio_video.ui.errors_map import Failure
 from radio_video.ui.state import Mode, Page, PreviewKind, Progress, UiState
 from radio_video.ui.widgets.drop_zone import DropState
-from radio_video.ui.windows.main_window import COMPACT_BELOW, Engine, MainWindow
+from radio_video.ui.windows.main_window import COMPACT_BELOW, Engine, MainWindow, UpdateStatus
 from radio_video.ui.windows.preview_window import Phase, PreviewRequest, PreviewWindow
 
 # Client sizes: the design's 1440×900 and 960×720 frames include a 32 px title bar.
@@ -361,6 +362,40 @@ def _page(page: Page) -> Callable[[MainWindow], None]:
     return apply
 
 
+DEMO_UPDATE = Update(
+    "0.5.0",
+    "https://github.com/dcCarreto/radio-video/releases/tag/v0.5.0",
+    "",
+    "Radio-Video-Setup-0.5.0.exe",
+    120 * MB,
+    "0" * 64,
+)
+
+
+def _update_ready(window: MainWindow) -> None:
+    _loaded(window)
+    window.installable = True
+    window.launch_installer = lambda _path, _relaunch: False
+    window.available_update = DEMO_UPDATE
+    # Never a real file, so closing the gallery window installs nothing.
+    window.update_installer = Path(tempfile.gettempdir()) / "rv-gallery-missing-setup.exe"
+    window.update_status = UpdateStatus.READY
+    window._render_update()
+
+
+def _settings_updates(window: MainWindow) -> None:
+    _update_ready(window)
+    window.machine.go(Page.SETTINGS)
+    QApplication.processEvents()
+    bar = window.settings_page.scroll_area.verticalScrollBar()
+    bar.setValue(bar.maximum())
+
+
+def _update_dialog(window: MainWindow) -> None:
+    _update_ready(window)
+    window._offer_update()
+
+
 def _quit(window: MainWindow) -> None:
     _converting(window)
     window.close()
@@ -506,7 +541,9 @@ STATES = (
     GalleryState("queue-empty", "Queue: empty", _page(Page.QUEUE)),
     GalleryState("history", "History: saved, failed, canceled and moved", _history_demo),
     GalleryState("history-empty", "History: empty", _page(Page.HISTORY)),
-    GalleryState("settings", "Settings (planned)", _page(Page.SETTINGS)),
+    GalleryState("settings", "Settings", _page(Page.SETTINGS)),
+    GalleryState("settings-updates", "Settings: update ready to install", _settings_updates),
+    GalleryState("update-ready", "Update downloaded: restart now or later", _update_dialog),
 )
 
 
@@ -528,7 +565,7 @@ def capture(window: MainWindow) -> QPixmap:
     image = window.grab()
     painter = QPainter(image)
     overlays: list[QWidget] = []
-    dialog = window.open_dialog
+    dialog = window.open_dialog or window.update_dialog
     if isinstance(dialog, QDialog) and dialog.isVisible():
         overlays.append(dialog)
     preview = window.preview_window

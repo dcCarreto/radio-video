@@ -169,6 +169,7 @@ class PreviewWindow(QWidget):
         *,
         compact: bool = False,
         autoplay: bool = True,
+        temp_root: Path | None = None,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
@@ -189,7 +190,7 @@ class PreviewWindow(QWidget):
         self.setWindowIcon(icons.app_icon())
         self.resize(SIZE_COMPACT if compact else SIZE)
 
-        self.generator = PreviewGenerator(ffmpeg, self)
+        self.generator = PreviewGenerator(ffmpeg, self, temp_root)
         self.generator.progress.connect(self._on_progress)
         self.generator.ready.connect(self._on_ready)
         self.generator.failed.connect(self._on_failed)

@@ -6,10 +6,12 @@ import contextlib
 import logging
 import os
 import sys
+import tempfile
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from datetime import datetime
+from enum import Enum
 from functools import partial
 from pathlib import Path
 
@@ -21,6 +23,7 @@ from PySide6.QtCore import (
     QStandardPaths,
     Qt,
     QThreadPool,
+    QTimer,
     QUrl,
     Signal,
     SignalInstance,
@@ -51,25 +54,45 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from radio_video.ffmpeg.capabilities import CapabilityError, ffmpeg_version, list_encoders
-from radio_video.ffmpeg.locator import FFmpegNotFoundError, FFmpegTools, locate_tools
+from radio_video import __version__
+from radio_video.ffmpeg.capabilities import (
+    CapabilityError,
+    ffmpeg_version,
+    list_encoders,
+    program_version,
+)
+from radio_video.ffmpeg.locator import (
+    FFMPEG_ENV,
+    FFmpegNotFoundError,
+    FFmpegTools,
+    bundled_dirs,
+    locate_tools,
+)
 from radio_video.ffmpeg.progress import ProgressUpdate
 from radio_video.models.advanced import AdvancedChoices, EncoderChoice, Recipe, resolve
 from radio_video.models.conversion import ConversionJob, ConversionSettings
 from radio_video.models.estimate import estimate_output_size
 from radio_video.models.hardware import HardwareSupport, accelerate
 from radio_video.models.media import MediaInfo
-from radio_video.models.presets import OutputFormat, available_formats, format_by_key
+from radio_video.models.presets import (
+    OUTPUT_FORMATS,
+    OutputFormat,
+    Quality,
+    available_formats,
+    format_by_key,
+)
 from radio_video.services.analysis import MediaAnalyzer
 from radio_video.services.conversion import ConversionError, ConversionRunner
 from radio_video.services.history import HistoryRecord, HistoryResult, HistoryStore
 from radio_video.services.queue import ConversionQueue, FileReader, QueueEntry, QueueStatus
+from radio_video.services.updates import Update, UpdateService, can_install, launch_installer
 from radio_video.ui import icons, theme
 from radio_video.ui import strings as s
 from radio_video.ui import viewmodel as vm
 from radio_video.ui.dialogs.about_dialog import AboutDialog
 from radio_video.ui.dialogs.failed_dialog import FailedDialog
 from radio_video.ui.dialogs.quit_dialog import QuitDialog
+from radio_video.ui.dialogs.update_dialog import UpdateDialog
 from radio_video.ui.errors_map import Failure, NextStep, describe
 from radio_video.ui.file_types import open_file_filter
 from radio_video.ui.native.dwm import style_title_bar
@@ -80,8 +103,16 @@ from radio_video.ui.pages.convert_page import ConvertPage
 from radio_video.ui.pages.convert_panel import PanelView
 from radio_video.ui.pages.history_page import HistoryPage
 from radio_video.ui.pages.history_page import row_view as history_row
-from radio_video.ui.pages.planned_pages import SettingsPage
 from radio_video.ui.pages.queue_page import QueuePage, QueueView, counts_text, row_view
+from radio_video.ui.pages.settings_page import (
+    SAVE_SAME,
+    UPDATE_DOWNLOAD,
+    UPDATE_OPEN_PAGE,
+    UPDATE_RESTART,
+    SettingsPage,
+    SettingsView,
+    UpdateView,
+)
 from radio_video.ui.pages.start_view import make_drop_zone
 from radio_video.ui.state import (
     Dialog,
@@ -98,9 +129,11 @@ from radio_video.ui.state import (
 )
 from radio_video.ui.strings import tr
 from radio_video.ui.theme.fonts import TextStyle
-from radio_video.ui.theme.tokens import Palette
+from radio_video.ui.theme.tokens import Palette, Scheme
+from radio_video.ui.widgets.badge import BadgeTone
 from radio_video.ui.widgets.button import ButtonKind
 from radio_video.ui.widgets.drop_zone import DropState, check_drop, dropped_paths
+from radio_video.ui.widgets.format_combo import Choice
 from radio_video.ui.widgets.labels import label
 from radio_video.ui.widgets.painting import antialiased, fill_rounded, follow_theme
 from radio_video.ui.widgets.progress import Spinner
@@ -118,6 +151,19 @@ STATUS_HEIGHT = 26
 STATUS_MESSAGE_MS = 5000
 LAST_FOLDER_KEY = "convert/lastFolder"
 HARDWARE_KEY = "performance/hardwareAcceleration"
+SAVE_MODE_KEY = "defaults/saveMode"
+VIDEO_FORMAT_KEY = "defaults/videoFormat"
+AUDIO_FORMAT_KEY = "defaults/audioFormat"
+QUALITY_KEY = "defaults/quality"
+FFMPEG_KEY = "engine/ffmpeg"
+FFPROBE_KEY = "engine/ffprobe"
+TEMP_KEY = "files/temporaryFolder"
+THEME_KEY = "appearance/theme"
+UPDATES_AUTOMATIC_KEY = "updates/automatic"
+# The automatic check waits until the window has settled.
+UPDATE_CHECK_DELAY_MS = 4000
+DEFAULT_VIDEO_FORMAT = "mp4-h264"
+DEFAULT_AUDIO_FORMAT = "mp3"
 PAGE_INDEX = {Page.CONVERT: 0, Page.QUEUE: 1, Page.HISTORY: 2, Page.SETTINGS: 3}
 
 
@@ -137,6 +183,16 @@ class Engine:
 
 
 HardwareDetector = Callable[[Path, frozenset[str]], HardwareSupport | None]
+
+
+class UpdateStatus(Enum):
+    IDLE = "idle"
+    CHECKING = "checking"
+    CURRENT = "current"
+    AVAILABLE = "available"
+    DOWNLOADING = "downloading"
+    READY = "ready"
+    FAILED = "failed"
 
 
 class _HardwareTask(QRunnable):
@@ -225,15 +281,31 @@ class MainWindow(QMainWindow):
         engine: Engine,
         *,
         settings: QSettings | None = None,
-        locate: Callable[[], FFmpegTools] = locate_tools,
+        locate: Callable[[], FFmpegTools] | None = None,
         detect_hardware: HardwareDetector | None = None,
         history_path: Path | None = None,
+        updates: UpdateService | None = None,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self.engine = engine
         self.settings = settings or QSettings()
-        self._locate = locate
+        self.updates = updates or UpdateService(default_update_folder(), self)
+        self.update_status = UpdateStatus.IDLE
+        self.available_update: Update | None = None
+        self.update_installer: Path | None = None
+        self._update_error = ""
+        self._update_received = 0
+        self._install_when_ready = False
+        self._installer_launched = False
+        self.update_dialog: UpdateDialog | None = None
+        # Only the installed application can run the installer; tests replace these.
+        self.installable = can_install()
+        self.launch_installer: Callable[[Path, bool], bool] = launch_installer
+        self.open_url: Callable[[str], object] = lambda url: QDesktopServices.openUrl(QUrl(url))
+        # Finds FFmpeg again for Check Again, including the files chosen in Settings.
+        self._locate = locate or (lambda: locate_tools(chosen=chosen_tools(self.settings)))
+        self._engine_warning = ""
         self._detect_hardware = detect_hardware
         self._hardware_request = 0
         # Set by "Convert with Software" after the graphics card encoder failed.
@@ -274,6 +346,13 @@ class MainWindow(QMainWindow):
         self.notifier.activated.connect(self._bring_to_front)
         self._hardware_found.connect(self._on_hardware_found)
         self._start_hardware_detection()
+        self.updates.checked.connect(self._on_update_checked)
+        self.updates.check_failed.connect(self._on_update_check_failed)
+        self.updates.progressed.connect(self._on_update_progress)
+        self.updates.downloaded.connect(self._on_update_downloaded)
+        self.updates.download_failed.connect(self._on_update_download_failed)
+        # The switches and choices show the saved values before the page is first opened.
+        self.settings_page.show_view(self.settings_view())
 
         self.machine.subscribe(self._render)
         if not engine.available:
@@ -314,9 +393,7 @@ class MainWindow(QMainWindow):
                 TabSpec("main", tr(s.TAB_CONVERT), "ArrowRightLeft"),
                 TabSpec("queue", tr(s.TAB_QUEUE), "ListOrdered"),
                 TabSpec("history", tr(s.TAB_HISTORY), "History"),
-                TabSpec(
-                    "settings", tr(s.TAB_SETTINGS), "Settings", True, tr(s.BADGE_PLANNED), True
-                ),
+                TabSpec("settings", tr(s.TAB_SETTINGS), "Settings", trailing=True),
             ]
         )
         self.tabs.current_changed.connect(lambda key: self.machine.go(Page(key)))
@@ -362,10 +439,26 @@ class MainWindow(QMainWindow):
         self.history_page.show_requested.connect(self._show_history_output)
         self.history_page.details_requested.connect(self._show_history_details)
         self.history_page.clear_requested.connect(self.clear_history)
-        self.settings_page = SettingsPage(
-            self.engine.tools, self.engine.version, hardware_enabled=self.hardware_enabled
+        self.settings_page = SettingsPage()
+        page_s = self.settings_page
+        page_s.hardware_changed.connect(self._on_hardware_changed)
+        page_s.check_requested.connect(self._on_settings_check)
+        page_s.engine_browse_requested.connect(self.choose_engine_program)
+        page_s.engine_reset_requested.connect(self._on_engine_reset)
+        page_s.save_mode_changed.connect(lambda mode: self._save_setting(SAVE_MODE_KEY, mode))
+        page_s.save_folder_browse_requested.connect(self.choose_default_folder)
+        page_s.video_format_changed.connect(lambda key: self._save_setting(VIDEO_FORMAT_KEY, key))
+        page_s.audio_format_changed.connect(lambda key: self._save_setting(AUDIO_FORMAT_KEY, key))
+        page_s.quality_changed.connect(
+            lambda quality: self._save_setting(QUALITY_KEY, quality.value)
         )
-        self.settings_page.hardware_changed.connect(self._on_hardware_changed)
+        page_s.temp_browse_requested.connect(self.choose_temp_folder)
+        page_s.temp_reset_requested.connect(lambda: self._save_setting(TEMP_KEY, None))
+        page_s.theme_changed.connect(self._on_theme_choice)
+        page_s.updates_automatic_changed.connect(self._on_updates_automatic)
+        page_s.update_check_requested.connect(self.check_for_updates)
+        page_s.update_action_requested.connect(self._on_update_action)
+        page_s.update_notes_requested.connect(self._open_release_notes)
         for page_widget in (self.queue_page, self.history_page, self.settings_page):
             self.pages.addWidget(page_widget)
 
@@ -399,12 +492,15 @@ class MainWindow(QMainWindow):
         self.about_action.triggered.connect(self.machine.show_about)
         self.about_qt_action = QAction(tr(s.ACTION_ABOUT_QT), self)
         self.about_qt_action.triggered.connect(QApplication.aboutQt)
+        self.update_action = QAction(tr(s.ACTION_CHECK_UPDATES), self)
+        self.update_action.triggered.connect(self._on_check_updates_menu)
 
         file_menu = self.menuBar().addMenu(tr(s.MENU_FILE))
         file_menu.addAction(self.open_action)
         file_menu.addSeparator()
         file_menu.addAction(self.exit_action)
         help_menu = self.menuBar().addMenu(tr(s.MENU_HELP))
+        help_menu.addAction(self.update_action)
         help_menu.addAction(self.about_action)
         help_menu.addAction(self.about_qt_action)
 
@@ -433,6 +529,8 @@ class MainWindow(QMainWindow):
         self.pages.setCurrentIndex(PAGE_INDEX[state.page])
         if state.page is Page.HISTORY:
             self._render_history()
+        elif state.page is Page.SETTINGS:
+            self.settings_page.show_view(self.settings_view())
 
         page = self.convert_page
         if state.screen is Screen.MISSING:
@@ -571,6 +669,9 @@ class MainWindow(QMainWindow):
         elif state.previewing and state.preview is not None:
             percent = vm.percent(state.preview.progress.fraction)
             self.status_item.show_status(tr(s.STATUS_PREVIEWING).format(percent=percent), busy=True)
+        elif self.update_status is UpdateStatus.READY and self.available_update is not None:
+            text = tr(s.STATUS_UPDATE_READY).format(version=self.available_update.version)
+            self.status_item.show_status(text, busy=False)
         else:
             text = tr(s.STATUS_ENGINE_READY).format(version=self.engine.version or "")
             self.status_item.show_status(text.rstrip(), busy=False)
@@ -698,6 +799,8 @@ class MainWindow(QMainWindow):
             self.machine.set_mode(mode)
 
     def default_folder(self, media: MediaInfo) -> Path:
+        if self.settings.value(SAVE_MODE_KEY, "") == SAVE_SAME:
+            return media.path.parent
         saved = str(self.settings.value(LAST_FOLDER_KEY, "") or "")
         if saved and Path(saved).is_dir():
             return Path(saved)
@@ -717,7 +820,9 @@ class MainWindow(QMainWindow):
         folder = QFileDialog.getExistingDirectory(self, tr(s.BROWSE_TOOLTIP), start)
         if folder:
             self.session.folder = Path(folder)
-            self.settings.setValue(LAST_FOLDER_KEY, folder)
+            # In "same folder" mode the choice is for this file only.
+            if self.settings.value(SAVE_MODE_KEY, "") != SAVE_SAME:
+                self.settings.setValue(LAST_FOLDER_KEY, folder)
             self._render(self.machine.state)
 
     # Opening files
@@ -745,10 +850,15 @@ class MainWindow(QMainWindow):
         self.session.folder = folder or self.default_folder(media)
         formats = available_formats(self.engine.encoders, media.has_video)
         keys = [fmt.key for fmt in formats]
-        key = self.machine.state.format_key
+        key = self.default_format_key(media.has_video)
         if keys and key not in keys:
             key = keys[0]
-        self.machine.file_opened(media.path, format_key=key, lossless=format_by_key(key).lossless)
+        self.machine.file_opened(
+            media.path,
+            format_key=key,
+            lossless=format_by_key(key).lossless,
+            quality=self.default_quality(),
+        )
         self.convert_page.file.source.set_media(media)
         self.convert_page.file.panel.format.setFocus(Qt.FocusReason.OtherFocusReason)
 
@@ -935,6 +1045,7 @@ class MainWindow(QMainWindow):
             request,
             compact=bool(self._compact),
             autoplay=self.preview_autoplay,
+            temp_root=self.preview_temp_root(),
             parent=self,
         )
         window.progress.connect(self.machine.preview_progress)
@@ -1234,6 +1345,363 @@ class MainWindow(QMainWindow):
             self.history.clear()
             self._render_history()
 
+    # Settings
+    def _save_setting(self, key: str, value: object) -> None:
+        if value is None:
+            self.settings.remove(key)
+        else:
+            self.settings.setValue(key, value)
+        self._render(self.machine.state)
+
+    def default_format_key(self, video: bool) -> str:
+        key, default = (
+            (VIDEO_FORMAT_KEY, DEFAULT_VIDEO_FORMAT)
+            if video
+            else (AUDIO_FORMAT_KEY, DEFAULT_AUDIO_FORMAT)
+        )
+        return str(self.settings.value(key, default) or default)
+
+    def default_quality(self) -> Quality:
+        try:
+            return Quality(str(self.settings.value(QUALITY_KEY, Quality.BALANCED.value)))
+        except ValueError:
+            return Quality.BALANCED
+
+    def preview_temp_root(self) -> Path | None:
+        saved = str(self.settings.value(TEMP_KEY, "") or "")
+        return Path(saved) if saved and Path(saved).is_dir() else None
+
+    def settings_view(self) -> SettingsView:
+        tools = self.engine.tools
+        chosen = chosen_tools(self.settings)
+        note, warning = "", False
+        if self._engine_warning:
+            note, warning = self._engine_warning, True
+        elif tools is not None and chosen is not None and chosen != _resolved(tools):
+            note = tr(s.SETTINGS_RESTART)
+        elif tools is not None and chosen is None and engine_source(tools) == "chosen":
+            note = tr(s.SETTINGS_RESTART_AUTOMATIC)
+        if tools is not None:
+            source = {
+                "chosen": tr(s.SETTINGS_SOURCE_CHOSEN),
+                "bundled": tr(s.SETTINGS_SOURCE_BUNDLED),
+                "env": tr(s.SETTINGS_SOURCE_ENV).format(variable=FFMPEG_ENV),
+                "path": tr(s.SETTINGS_SOURCE_PATH),
+            }[engine_source(tools, chosen)]
+            engine_text = tr(s.SETTINGS_FOUND).format(
+                version=self.engine.version or "", source=source
+            )
+            ffmpeg, ffprobe = str(tools.ffmpeg), str(tools.ffprobe)
+        else:
+            engine_text = tr(s.SETTINGS_MISSING)
+            ffmpeg = str(chosen.ffmpeg) if chosen else tr(s.SETTINGS_NOT_CHOSEN)
+            ffprobe = str(chosen.ffprobe) if chosen else tr(s.SETTINGS_NOT_CHOSEN)
+        formats = available_formats(self.engine.encoders, True) or OUTPUT_FORMATS
+        video = tuple(Choice(f.key, f.label) for f in formats if f.is_video)
+        audio = tuple(Choice(f.key, f.label) for f in formats if not f.is_video)
+        mode = str(self.settings.value(SAVE_MODE_KEY, "") or "folder")
+        folder = str(self.settings.value(LAST_FOLDER_KEY, "") or "")
+        temp = self.preview_temp_root()
+        scheme = theme.current().override
+        return SettingsView(
+            engine_working=tools is not None,
+            engine_text=engine_text,
+            ffmpeg=ffmpeg,
+            ffprobe=ffprobe,
+            engine_chosen=chosen is not None,
+            engine_note=note,
+            engine_note_warning=warning,
+            save_mode=mode,
+            save_folder=folder or tr(s.SETTINGS_AUTOMATIC_FOLDER),
+            video_formats=video,
+            video_format=self.default_format_key(True),
+            audio_formats=audio,
+            audio_format=self.default_format_key(False),
+            quality=self.default_quality(),
+            hardware_enabled=self.hardware_enabled,
+            hardware_text=self.hardware_text(),
+            temp_location=str(temp)
+            if temp is not None
+            else tr(s.SETTINGS_TEMP_DEFAULT).format(path=tempfile.gettempdir()),
+            temp_is_default=temp is None,
+            theme=scheme.value if scheme is not None else "system",
+            update=self.update_view(),
+        )
+
+    def choose_engine_program(self, program: str) -> None:
+        current = self.engine.tools
+        start = str((current.ffmpeg if current else Path.home()).parent)
+        filename, _ = QFileDialog.getOpenFileName(
+            self,
+            tr(s.SETTINGS_CHOOSE_PROGRAM).format(program=program),
+            start,
+            f"{program}.exe ({program}.exe);;{tr(s.SETTINGS_PROGRAM_FILTER)}",
+        )
+        if filename:
+            self.set_engine_program(program, Path(filename))
+
+    def set_engine_program(self, program: str, path: Path) -> bool:
+        """Use ``path`` for ``program`` if it answers as that program."""
+        if program_version(path, program) is None:
+            self._engine_warning = tr(s.SETTINGS_NOT_PROGRAM).format(
+                name=path.name, program=program
+            )
+            self._render(self.machine.state)
+            return False
+        self._engine_warning = ""
+        key, other_key, other = (
+            (FFMPEG_KEY, FFPROBE_KEY, "ffprobe")
+            if program == "ffmpeg"
+            else (FFPROBE_KEY, FFMPEG_KEY, "ffmpeg")
+        )
+        self.settings.setValue(key, str(path))
+        # The other program usually sits in the same folder.
+        sibling = path.with_name(f"{other}{path.suffix}")
+        if not self.settings.value(other_key, "") and sibling.is_file():
+            self.settings.setValue(other_key, str(sibling))
+        if not self.engine.available and chosen_tools(self.settings) is not None:
+            self.check_engine_again()
+        self._render(self.machine.state)
+        return True
+
+    def _on_engine_reset(self) -> None:
+        self.settings.remove(FFMPEG_KEY)
+        self.settings.remove(FFPROBE_KEY)
+        self._engine_warning = ""
+        self._render(self.machine.state)
+
+    def _on_settings_check(self) -> None:
+        if not self.engine.available:
+            self.check_engine_again()
+        else:
+            self.engine.hardware_checked = False
+            self.engine.hardware = None
+            self._start_hardware_detection()
+        self._render(self.machine.state)
+
+    def choose_default_folder(self) -> None:
+        start = str(self.settings.value(LAST_FOLDER_KEY, "") or Path.home())
+        folder = QFileDialog.getExistingDirectory(self, tr(s.BROWSE).rstrip("…"), start)
+        if folder:
+            if not self.folder_writable(Path(folder)):
+                self.statusBar().showMessage(
+                    tr(s.SETTINGS_FOLDER_NOT_WRITABLE).format(folder=folder), STATUS_MESSAGE_MS
+                )
+                return
+            self.settings.setValue(SAVE_MODE_KEY, "folder")
+            self._save_setting(LAST_FOLDER_KEY, folder)
+
+    def choose_temp_folder(self) -> None:
+        start = str(self.preview_temp_root() or tempfile.gettempdir())
+        folder = QFileDialog.getExistingDirectory(self, tr(s.BROWSE).rstrip("…"), start)
+        if folder:
+            if not self.folder_writable(Path(folder)):
+                self.statusBar().showMessage(
+                    tr(s.SETTINGS_FOLDER_NOT_WRITABLE).format(folder=folder), STATUS_MESSAGE_MS
+                )
+                return
+            self._save_setting(TEMP_KEY, folder)
+
+    def _on_theme_choice(self, value: str) -> None:
+        apply_theme_choice(value)
+        self._save_setting(THEME_KEY, value)
+
+    # Updates
+    @property
+    def updates_automatic(self) -> bool:
+        return bool(self.settings.value(UPDATES_AUTOMATIC_KEY, True, type=bool))
+
+    def start_automatic_updates(self, delay_ms: int = UPDATE_CHECK_DELAY_MS) -> None:
+        """Called once at startup: checks shortly after if updates are automatic."""
+        if self.updates_automatic:
+            QTimer.singleShot(delay_ms, self, lambda: self.check_for_updates(automatic=True))
+
+    def check_for_updates(self, automatic: bool = False) -> None:
+        if automatic and not self.updates_automatic:
+            return
+        if self.update_status in (
+            UpdateStatus.CHECKING,
+            UpdateStatus.DOWNLOADING,
+            UpdateStatus.READY,
+        ):
+            return
+        if self.updates.check():
+            self.update_status = UpdateStatus.CHECKING
+            self._update_error = ""
+            self._render_update()
+
+    @Slot(object)
+    def _on_update_checked(self, update: Update | None) -> None:
+        self.available_update = update
+        if update is None:
+            self.update_status = UpdateStatus.CURRENT
+        else:
+            logger.info("Version %s is available", update.version)
+            self.update_status = UpdateStatus.AVAILABLE
+            if self.installable and self.updates_automatic:
+                self.download_update()
+                return
+        self._render_update()
+
+    @Slot(str)
+    def _on_update_check_failed(self, reason: str) -> None:
+        logger.warning("Checking for updates failed: %s", reason)
+        self.update_status = UpdateStatus.FAILED
+        self.available_update = None
+        self._update_error = tr(s.UPDATES_CHECK_FAILED).format(reason=reason)
+        self._render_update()
+
+    def download_update(self, install_when_ready: bool = False) -> None:
+        update = self.available_update
+        if update is None or not self.installable:
+            return
+        if self.updates.download(update):
+            self._install_when_ready = install_when_ready
+            self.update_status = UpdateStatus.DOWNLOADING
+            self._update_error = ""
+            self._update_received = 0
+            self._render_update()
+
+    @Slot(int, int)
+    def _on_update_progress(self, received: int, _total: int) -> None:
+        self._update_received = received
+        self.settings_page.show_update(self.update_view())
+
+    @Slot(object)
+    def _on_update_downloaded(self, installer: Path) -> None:
+        self.update_installer = installer
+        self.update_status = UpdateStatus.READY
+        self._render_update()
+        if self._install_when_ready:
+            self.install_update()
+        else:
+            self._offer_update()
+
+    @Slot(str)
+    def _on_update_download_failed(self, reason: str) -> None:
+        logger.warning("Downloading the update failed: %s", reason)
+        self.update_status = UpdateStatus.FAILED
+        version = self.available_update.version if self.available_update else ""
+        self._update_error = tr(s.UPDATES_DOWNLOAD_FAILED).format(version=version, reason=reason)
+        self._render_update()
+
+    def _busy(self) -> bool:
+        state = self.machine.state
+        return (
+            state.converting or state.previewing or (self.queue is not None and self.queue.running)
+        )
+
+    def _offer_update(self) -> None:
+        """Ask once whether to restart now; never over a conversion or another dialog."""
+        update = self.available_update
+        if update is None or self._busy() or self._dialog is not None or not self.isVisible():
+            return
+        dialog = UpdateDialog(update.version, self)
+        self.update_dialog = dialog
+        dialog.finished.connect(self._on_update_dialog_finished)
+        dialog.open()
+
+    @Slot(int)
+    def _on_update_dialog_finished(self, result: int) -> None:
+        self.update_dialog = None
+        if result == QDialog.DialogCode.Accepted.value:
+            self.install_update()
+
+    def install_update(self) -> bool:
+        """Start the installer, which opens Radio/Video again, and close."""
+        installer = self.update_installer
+        update = self.available_update
+        if installer is None or update is None or not installer.is_file():
+            return False
+        if self._busy():
+            self.statusBar().showMessage(tr(s.UPDATES_BUSY), STATUS_MESSAGE_MS)
+            return False
+        if not self.launch_installer(installer, True):
+            self.statusBar().showMessage(
+                tr(s.UPDATES_INSTALL_FAILED).format(version=update.version), STATUS_MESSAGE_MS
+            )
+            return False
+        logger.info("Installing version %s", update.version)
+        self._installer_launched = True
+        self._quitting = True
+        self.close()
+        return True
+
+    @Slot(str)
+    def _on_update_action(self, action: str) -> None:
+        if action == UPDATE_DOWNLOAD:
+            self.download_update(install_when_ready=True)
+        elif action == UPDATE_RESTART:
+            self.install_update()
+        elif action == UPDATE_OPEN_PAGE:
+            self._open_release_notes()
+
+    def _open_release_notes(self) -> None:
+        if self.available_update is not None:
+            self.open_url(self.available_update.page_url)
+
+    @Slot(bool)
+    def _on_updates_automatic(self, enabled: bool) -> None:
+        self.settings.setValue(UPDATES_AUTOMATIC_KEY, enabled)
+        if not enabled:
+            self._render_update()
+        elif self.update_status is UpdateStatus.AVAILABLE:
+            self.download_update()
+        elif self.update_status in (UpdateStatus.IDLE, UpdateStatus.FAILED):
+            self.check_for_updates(automatic=True)
+        else:
+            self._render_update()
+
+    def _on_check_updates_menu(self) -> None:
+        self.tabs.set_current(Page.SETTINGS.value)
+        self.check_for_updates()
+
+    def _render_update(self) -> None:
+        self.settings_page.show_update(self.update_view())
+        self._render_status(self.machine.state)
+
+    def update_view(self) -> UpdateView:
+        status, update = self.update_status, self.available_update
+        new = update.version if update is not None else ""
+        notes = update is not None
+        action = ""
+        if status is UpdateStatus.CURRENT:
+            badge, tone = tr(s.UPDATES_BADGE_CURRENT), BadgeTone.SUCCESS
+            text = tr(s.UPDATES_CURRENT).format(version=__version__)
+        elif status is UpdateStatus.AVAILABLE:
+            badge, tone = tr(s.UPDATES_BADGE_AVAILABLE), BadgeTone.ACCENT
+            text = tr(s.UPDATES_AVAILABLE).format(version=new, current=__version__)
+            action = UPDATE_DOWNLOAD if self.installable else UPDATE_OPEN_PAGE
+            notes = self.installable
+        elif status is UpdateStatus.DOWNLOADING:
+            badge, tone = tr(s.UPDATES_BADGE_DOWNLOADING), BadgeTone.ACCENT
+            size = update.size if update is not None else 0
+            percent = vm.percent(self._update_received / size) if size else 0
+            text = tr(s.UPDATES_DOWNLOADING).format(version=new, percent=percent)
+        elif status is UpdateStatus.READY:
+            badge, tone = tr(s.UPDATES_BADGE_READY), BadgeTone.SUCCESS
+            text = tr(s.UPDATES_READY).format(version=new)
+            action = UPDATE_RESTART
+        elif status is UpdateStatus.FAILED:
+            badge, tone = tr(s.UPDATES_BADGE_FAILED), BadgeTone.WARNING
+            text = self._update_error
+            if update is not None:
+                action = UPDATE_DOWNLOAD if self.installable else UPDATE_OPEN_PAGE
+        else:
+            badge, tone = tr(s.UPDATES_BADGE_VERSION).format(version=__version__), BadgeTone.NEUTRAL
+            text = tr(s.UPDATES_CHECKING) if status is UpdateStatus.CHECKING else ""
+        return UpdateView(
+            automatic=self.updates_automatic,
+            installable=self.installable,
+            badge=badge,
+            tone=tone,
+            text=text,
+            checking=status
+            in (UpdateStatus.CHECKING, UpdateStatus.DOWNLOADING, UpdateStatus.READY),
+            action=action,
+            notes=notes,
+        )
+
     # Engine
     @Slot()
     def check_engine_again(self) -> None:
@@ -1370,6 +1838,18 @@ class MainWindow(QMainWindow):
             self.runner.cancel()
             self.runner.wait()
         self.taskbar.close()
+        self.updates.cancel()
+        if self.update_dialog is not None:
+            self.update_dialog.done(QDialog.DialogCode.Rejected)
+        installer = self.update_installer
+        if (
+            self.update_status is UpdateStatus.READY
+            and not self._installer_launched
+            and installer is not None
+            and installer.is_file()
+        ):
+            # Downloaded but not installed yet: install on the way out, without reopening.
+            self._installer_launched = self.launch_installer(installer, False)
         super().closeEvent(event)
 
     def resizeEvent(self, event: QResizeEvent) -> None:  # noqa: N802
@@ -1396,6 +1876,44 @@ class MainWindow(QMainWindow):
         self.showNormal()
         self.raise_()
         self.activateWindow()
+
+
+def chosen_tools(settings: QSettings) -> FFmpegTools | None:
+    """The ffmpeg.exe and ffprobe.exe chosen in Settings, when both are set."""
+    ffmpeg = str(settings.value(FFMPEG_KEY, "") or "")
+    ffprobe = str(settings.value(FFPROBE_KEY, "") or "")
+    if not ffmpeg or not ffprobe:
+        return None
+    return FFmpegTools(Path(ffmpeg), Path(ffprobe))
+
+
+def _resolved(tools: FFmpegTools) -> FFmpegTools:
+    return FFmpegTools(tools.ffmpeg.resolve(), tools.ffprobe.resolve())
+
+
+def engine_source(tools: FFmpegTools, chosen: FFmpegTools | None = None) -> str:
+    """Where the FFmpeg in use came from: "env", "chosen", "bundled" or "path"."""
+    if os.environ.get(FFMPEG_ENV):
+        return "env"
+    if chosen is not None and _resolved(chosen) == _resolved(tools):
+        return "chosen"
+    if any(tools.ffmpeg.parent.resolve() == folder.resolve() for folder in bundled_dirs()):
+        return "bundled"
+    return "path"
+
+
+def saved_theme(settings: QSettings) -> str:
+    value = str(settings.value(THEME_KEY, "system") or "system")
+    return value if value in ("system", "light", "dark") else "system"
+
+
+def apply_theme_choice(value: str) -> None:
+    theme.current().set_override(None if value == "system" else Scheme(value))
+
+
+def default_update_folder() -> Path:
+    folder = QStandardPaths.writableLocation(QStandardPaths.StandardLocation.CacheLocation)
+    return Path(folder) / "updates"
 
 
 def default_history_path() -> Path:

@@ -35,6 +35,7 @@ ACTION_OPEN = QT_TRANSLATE_NOOP("RadioVideo", "Open File…")
 ACTION_EXIT = QT_TRANSLATE_NOOP("RadioVideo", "Exit")
 ACTION_ABOUT = QT_TRANSLATE_NOOP("RadioVideo", "About Radio/Video")
 ACTION_ABOUT_QT = QT_TRANSLATE_NOOP("RadioVideo", "About Qt")
+ACTION_CHECK_UPDATES = QT_TRANSLATE_NOOP("RadioVideo", "Check for Updates…")
 TAB_CONVERT = QT_TRANSLATE_NOOP("RadioVideo", "Convert")
 TAB_QUEUE = QT_TRANSLATE_NOOP("RadioVideo", "Queue")
 TAB_HISTORY = QT_TRANSLATE_NOOP("RadioVideo", "History")
@@ -500,10 +501,6 @@ ACTION_SOFTWARE = QT_TRANSLATE_NOOP("RadioVideo", "Convert with Software")
 ACTION_TRY_AGAIN = QT_TRANSLATE_NOOP("RadioVideo", "Try Again")
 
 # Planned screens
-PLANNED_SETTINGS = QT_TRANSLATE_NOOP(
-    "RadioVideo",
-    "Only Performance works so far. The other settings show how they will work.",
-)
 
 # Preview window
 PREVIEW_WINDOW_TITLE = QT_TRANSLATE_NOOP("RadioVideo", "Converted preview: {name}")
@@ -851,7 +848,7 @@ HISTORY_CLEAR_TEXT = QT_TRANSLATE_NOOP(
 HISTORY_CLEAR_CONFIRM = QT_TRANSLATE_NOOP("RadioVideo", "Clear History")
 HISTORY_DETAILS_TITLE = QT_TRANSLATE_NOOP("RadioVideo", "{name} wasn’t converted")
 
-# Settings (planned)
+# Settings
 SETTINGS_TITLE = QT_TRANSLATE_NOOP("RadioVideo", "Settings")
 SETTINGS_TEXT = QT_TRANSLATE_NOOP("RadioVideo", "Changes are saved as you make them.")
 SETTINGS_ENGINE = QT_TRANSLATE_NOOP("RadioVideo", "Conversion engine")
@@ -859,7 +856,37 @@ SETTINGS_ENGINE_TEXT = QT_TRANSLATE_NOOP(
     "RadioVideo", "Radio/Video uses FFmpeg to read and convert files."
 )
 SETTINGS_WORKING = QT_TRANSLATE_NOOP("RadioVideo", "Working")
-SETTINGS_FOUND = QT_TRANSLATE_NOOP("RadioVideo", "FFmpeg {version}, found at {folder}")
+SETTINGS_FOUND = QT_TRANSLATE_NOOP("RadioVideo", "FFmpeg {version}, {source}")
+SETTINGS_SOURCE_CHOSEN = QT_TRANSLATE_NOOP("RadioVideo", "chosen here")
+SETTINGS_SOURCE_BUNDLED = QT_TRANSLATE_NOOP("RadioVideo", "included with Radio/Video")
+SETTINGS_SOURCE_ENV = QT_TRANSLATE_NOOP("RadioVideo", "set by {variable}")
+SETTINGS_SOURCE_PATH = QT_TRANSLATE_NOOP("RadioVideo", "found on the system PATH")
+SETTINGS_NOT_FOUND = QT_TRANSLATE_NOOP("RadioVideo", "Not found")
+SETTINGS_MISSING = QT_TRANSLATE_NOOP(
+    "RadioVideo", "FFmpeg wasn’t found. Choose ffmpeg.exe and ffprobe.exe, or install it."
+)
+SETTINGS_NOT_CHOSEN = QT_TRANSLATE_NOOP("RadioVideo", "Not found")
+SETTINGS_FIND_AUTOMATICALLY = QT_TRANSLATE_NOOP("RadioVideo", "Find Automatically")
+SETTINGS_RESTART = QT_TRANSLATE_NOOP(
+    "RadioVideo", "Restart Radio/Video to switch to the FFmpeg chosen here."
+)
+SETTINGS_RESTART_AUTOMATIC = QT_TRANSLATE_NOOP(
+    "RadioVideo", "Restart Radio/Video to go back to the FFmpeg it finds by itself."
+)
+SETTINGS_NOT_PROGRAM = QT_TRANSLATE_NOOP(
+    "RadioVideo",
+    "{name} didn’t answer as {program}. Choose {program}.exe from an FFmpeg build.",
+)
+SETTINGS_CHOOSE_PROGRAM = QT_TRANSLATE_NOOP("RadioVideo", "Choose {program}.exe")
+SETTINGS_PROGRAM_FILTER = QT_TRANSLATE_NOOP("RadioVideo", "Programs (*.exe)")
+SETTINGS_AUTOMATIC_FOLDER = QT_TRANSLATE_NOOP(
+    "RadioVideo", "Your Videos folder (Music for audio files)"
+)
+SETTINGS_TEMP_DEFAULT = QT_TRANSLATE_NOOP("RadioVideo", "{path} (the Windows temporary folder)")
+SETTINGS_USE_DEFAULT = QT_TRANSLATE_NOOP("RadioVideo", "Use Default")
+SETTINGS_FOLDER_NOT_WRITABLE = QT_TRANSLATE_NOOP(
+    "RadioVideo", "Radio/Video can’t write to {folder}. Choose another folder."
+)
 SETTINGS_DEFAULTS = QT_TRANSLATE_NOOP("RadioVideo", "Defaults")
 SETTINGS_DEFAULTS_TEXT = QT_TRANSLATE_NOOP("RadioVideo", "What a newly opened file starts with.")
 SETTINGS_SAVE_TO = QT_TRANSLATE_NOOP("RadioVideo", "Save converted files to")
@@ -887,7 +914,8 @@ SETTINGS_HARDWARE_NONE = QT_TRANSLATE_NOOP(
 SETTINGS_TEMP = QT_TRANSLATE_NOOP("RadioVideo", "Temporary files")
 SETTINGS_TEMP_TEXT = QT_TRANSLATE_NOOP(
     "RadioVideo",
-    "Previews and unfinished conversions are kept here and removed automatically.",
+    "Previews are made here and deleted when the preview window closes. Unfinished "
+    "conversions are written next to the final file instead.",
 )
 SETTINGS_LOCATION = QT_TRANSLATE_NOOP("RadioVideo", "Location")
 SETTINGS_LOCATION_HELP = QT_TRANSLATE_NOOP(
@@ -899,3 +927,60 @@ SETTINGS_THEME = QT_TRANSLATE_NOOP("RadioVideo", "Theme")
 SETTINGS_THEME_SYSTEM = QT_TRANSLATE_NOOP("RadioVideo", "Use Windows setting")
 SETTINGS_THEME_LIGHT = QT_TRANSLATE_NOOP("RadioVideo", "Light")
 SETTINGS_THEME_DARK = QT_TRANSLATE_NOOP("RadioVideo", "Dark")
+
+# Updates
+UPDATES = QT_TRANSLATE_NOOP("RadioVideo", "Updates")
+UPDATES_TEXT = QT_TRANSLATE_NOOP(
+    "RadioVideo", "New versions come from the Radio/Video releases on GitHub."
+)
+UPDATES_AUTOMATIC = QT_TRANSLATE_NOOP("RadioVideo", "Update automatically")
+UPDATES_AUTOMATIC_HELP = QT_TRANSLATE_NOOP(
+    "RadioVideo",
+    "Checks for a new version when Radio/Video starts and downloads it in the background. "
+    "It’s installed when you close Radio/Video, or right away with Restart and Update.",
+)
+UPDATES_NOT_INSTALLED_HELP = QT_TRANSLATE_NOOP(
+    "RadioVideo",
+    "Checks for a new version when Radio/Video starts. This copy wasn’t set up with the "
+    "Windows installer, so new versions open on the download page.",
+)
+UPDATES_BADGE_VERSION = QT_TRANSLATE_NOOP("RadioVideo", "Version {version}")
+UPDATES_BADGE_CURRENT = QT_TRANSLATE_NOOP("RadioVideo", "Up to date")
+UPDATES_BADGE_AVAILABLE = QT_TRANSLATE_NOOP("RadioVideo", "New version")
+UPDATES_BADGE_DOWNLOADING = QT_TRANSLATE_NOOP("RadioVideo", "Downloading")
+UPDATES_BADGE_READY = QT_TRANSLATE_NOOP("RadioVideo", "Ready to install")
+UPDATES_BADGE_FAILED = QT_TRANSLATE_NOOP("RadioVideo", "Didn’t work")
+UPDATES_CHECKING = QT_TRANSLATE_NOOP("RadioVideo", "Checking for a new version…")
+UPDATES_CURRENT = QT_TRANSLATE_NOOP("RadioVideo", "Version {version} is the latest.")
+UPDATES_AVAILABLE = QT_TRANSLATE_NOOP(
+    "RadioVideo", "Version {version} is available. You have {current}."
+)
+UPDATES_DOWNLOADING = QT_TRANSLATE_NOOP("RadioVideo", "Downloading version {version}… {percent}%")
+UPDATES_READY = QT_TRANSLATE_NOOP(
+    "RadioVideo", "Version {version} installs when you close Radio/Video."
+)
+UPDATES_CHECK_FAILED = QT_TRANSLATE_NOOP("RadioVideo", "Couldn’t check for updates: {reason}")
+UPDATES_DOWNLOAD_FAILED = QT_TRANSLATE_NOOP(
+    "RadioVideo", "Version {version} couldn’t be downloaded: {reason}"
+)
+UPDATES_INSTALL_FAILED = QT_TRANSLATE_NOOP(
+    "RadioVideo", "The installer for version {version} didn’t start. Try the download page."
+)
+UPDATES_BUSY = QT_TRANSLATE_NOOP(
+    "RadioVideo", "Finish or stop the conversion, then restart to update."
+)
+UPDATES_CHECK_NOW = QT_TRANSLATE_NOOP("RadioVideo", "Check Now")
+UPDATES_DOWNLOAD = QT_TRANSLATE_NOOP("RadioVideo", "Download and Install")
+UPDATES_RESTART = QT_TRANSLATE_NOOP("RadioVideo", "Restart and Update")
+UPDATES_OPEN_PAGE = QT_TRANSLATE_NOOP("RadioVideo", "Open Download Page")
+UPDATES_WHATS_NEW = QT_TRANSLATE_NOOP("RadioVideo", "What’s New")
+UPDATES_LATER = QT_TRANSLATE_NOOP("RadioVideo", "Later")
+UPDATES_READY_TITLE = QT_TRANSLATE_NOOP("RadioVideo", "Radio/Video {version} is ready")
+UPDATES_READY_TEXT = QT_TRANSLATE_NOOP(
+    "RadioVideo",
+    "Restart now to finish updating. If you’d rather keep working, the update is installed "
+    "when you close Radio/Video.",
+)
+STATUS_UPDATE_READY = QT_TRANSLATE_NOOP(
+    "RadioVideo", "Version {version} installs when you close Radio/Video"
+)

@@ -91,9 +91,13 @@ class PreviewGenerator(QObject):
     failed = Signal(str)
     canceled = Signal()
 
-    def __init__(self, ffmpeg: Path, parent: QObject | None = None) -> None:
+    def __init__(
+        self, ffmpeg: Path, parent: QObject | None = None, temp_root: Path | None = None
+    ) -> None:
         super().__init__(parent)
         self.runner = ConversionRunner(ffmpeg, self)
+        # Where preview folders are made; the system temporary folder when None.
+        self.temp_root = temp_root
         self._temp_dir: Path | None = None
         self._kind = PreviewKind.SHORT
         self._start = 0.0
@@ -116,7 +120,10 @@ class PreviewGenerator(QObject):
         streams: StreamMap | None = None,
     ) -> None:
         self.discard()
-        self._temp_dir = Path(tempfile.mkdtemp(prefix=TEMP_PREFIX))
+        root = self.temp_root
+        if root is not None:
+            root.mkdir(parents=True, exist_ok=True)
+        self._temp_dir = Path(tempfile.mkdtemp(prefix=TEMP_PREFIX, dir=root))
         if kind is PreviewKind.SHORT:
             self._start, self._length = short_preview_range(media.duration)
         else:

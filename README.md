@@ -122,8 +122,23 @@ control over encoding parameters, tracks and filters.
   File moved when the output is no longer there), size and time taken. Saved files can be
   opened or shown in their folder; failures open the explanation and technical details.
   Clear History… asks first and never touches the converted files.
-- The Settings screen is still a preview under a "Planned" banner; only its hardware
-  acceleration switch acts.
+- Settings, saved as they change:
+  - Conversion engine: shows the FFmpeg in use and where it came from. Browse… chooses
+    ffmpeg.exe or ffprobe.exe (each is run first, and one that isn't FFmpeg is refused; the
+    other program in the same folder comes along). The choice applies at once when FFmpeg was
+    missing, otherwise from the next start; Find Automatically goes back. Check Again repeats
+    the graphics card check.
+  - Defaults for newly opened files: save to the same folder as the original or to a chosen
+    folder, the format for video files and for audio files, and the quality.
+  - Performance: hardware acceleration on or off, naming the detected graphics card.
+  - Temporary files: the folder previews are made in.
+  - Appearance: follow Windows, light or dark, applied at once.
+  - Updates: Update automatically (on by default) checks the latest GitHub release when the app
+    starts, downloads the new installer in the background and verifies it against the SHA-256
+    published with the release. It then offers Restart and Update, which installs and opens
+    the app again; otherwise the update installs when the app closes. Check Now and Help →
+    Check for Updates… check at any time, and What's New opens the release page. Copies not
+    set up with the installer open the download page instead.
 - Converted preview window:
   - **Preview 15 s** converts a 15-second sample, starting a third of the way into the file, with
     the exact settings. Files of 15 seconds or less are converted entirely. **Full Preview**
@@ -143,7 +158,8 @@ control over encoding parameters, tracks and filters.
 
 ## Planned Features
 
-- Settings: default folder, formats and quality, temporary files location and theme.
+- Code-signed installer.
+- Keeping the queue between sessions.
 
 ## Technology Stack
 
@@ -229,7 +245,8 @@ Each [GitHub release](https://github.com/dcCarreto/radio-video/releases) include
 
 - `Radio-Video-Setup-<version>.exe`: the Windows installer (64-bit Windows 10 or 11), with FFmpeg
   included. It installs for the current user without administrator rights, or for all users,
-  and adds a Start menu shortcut and an uninstaller.
+  and adds a Start menu shortcut and an uninstaller. From 0.5.0, installed copies update
+  themselves from later releases (Settings → Updates).
 - The FFmpeg source and build scripts that correspond to the bundled FFmpeg.
 - A wheel and a source distribution, for installing with pip (Python 3.11 or newer, FFmpeg
   installed separately):
@@ -278,6 +295,13 @@ A cumulative history of changes merged into `dev`, newest first.
 
 ### 2026-11-07
 
+- **#59 feat: update automatically from GitHub releases**: installed copies check for a new
+  version at startup, download the installer in the background, verify its SHA-256 and offer
+  Restart and Update (or install when the app closes). Settings → Updates turns this off and
+  has Check Now; Help → Check for Updates… checks at any time.
+- **#57 feat: make every setting work**: Settings now chooses the FFmpeg to use (checked before
+  it is accepted), where converted files are saved, the format and quality new files start
+  with, the folder for previews and the theme. Changes are saved as they are made.
 - **#53 feat: choose the audio track and subtitles in the player**: files with several audio
   tracks or with subtitles get menus in the preview window's player to switch the audio track
   and turn subtitles on, with each track named by its language and title. Text subtitles are
