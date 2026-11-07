@@ -79,7 +79,12 @@ DROP_OVER_TEXT = QT_TRANSLATE_NOOP(
 DROP_BLOCKED_TITLE = QT_TRANSLATE_NOOP("RadioVideo", "Can’t open a file right now")
 DROP_BLOCKED_SEVERAL = QT_TRANSLATE_NOOP(
     "RadioVideo",
-    "Drop one file at a time. Converting many files at once will come with the queue.",
+    "Drop files, not folders. Several files go to the queue.",
+)
+DROP_OVER_QUEUE_TITLE = QT_TRANSLATE_NOOP("RadioVideo", "Release to add %n file(s) to the queue")
+DROP_OVER_QUEUE_TEXT = QT_TRANSLATE_NOOP(
+    "RadioVideo",
+    "Each file is read and added with the format and quality chosen on the Convert tab.",
 )
 DROP_BLOCKED_CONVERTING = QT_TRANSLATE_NOOP(
     "RadioVideo",
@@ -491,9 +496,6 @@ ACTION_SOFTWARE = QT_TRANSLATE_NOOP("RadioVideo", "Convert with Software")
 ACTION_TRY_AGAIN = QT_TRANSLATE_NOOP("RadioVideo", "Try Again")
 
 # Planned screens
-PLANNED_QUEUE = QT_TRANSLATE_NOOP(
-    "RadioVideo", "The queue isn’t built yet. This shows how it will work."
-)
 PLANNED_HISTORY = QT_TRANSLATE_NOOP(
     "RadioVideo", "History isn’t built yet. This shows how it will work."
 )
@@ -740,7 +742,7 @@ ADV_LOUDNESS_COPY = QT_TRANSLATE_NOOP(
 CUSTOM_QUALITY = QT_TRANSLATE_NOOP("RadioVideo", "Quality: Custom (set in Advanced)")
 CUSTOM_RESET = QT_TRANSLATE_NOOP("RadioVideo", "Reset to Balanced")
 
-# Queue (planned)
+# Queue
 QUEUE_TITLE = QT_TRANSLATE_NOOP("RadioVideo", "Queue")
 QUEUE_TEXT = QT_TRANSLATE_NOOP(
     "RadioVideo",
@@ -753,7 +755,46 @@ QUEUE_UP = QT_TRANSLATE_NOOP("RadioVideo", "Move Up")
 QUEUE_DOWN = QT_TRANSLATE_NOOP("RadioVideo", "Move Down")
 QUEUE_RETRY = QT_TRANSLATE_NOOP("RadioVideo", "Retry")
 QUEUE_REMOVE = QT_TRANSLATE_NOOP("RadioVideo", "Remove")
-QUEUE_DRAG = QT_TRANSLATE_NOOP("RadioVideo", "Drag rows to reorder")
+QUEUE_START = QT_TRANSLATE_NOOP("RadioVideo", "Start Queue")
+QUEUE_CLEAR = QT_TRANSLATE_NOOP("RadioVideo", "Clear Finished")
+QUEUE_SHORTCUTS = QT_TRANSLATE_NOOP("RadioVideo", "Delete removes · Alt+Up/Down moves")
+QUEUE_EMPTY_TITLE = QT_TRANSLATE_NOOP("RadioVideo", "The queue is empty")
+QUEUE_EMPTY_TEXT = QT_TRANSLATE_NOOP(
+    "RadioVideo",
+    "Add files here with Add Files…, drop several files on the window, or set up a file on "
+    "the Convert tab and choose Add to Queue. Each file is converted with its own settings.",
+)
+QUEUE_START_BLOCKED = QT_TRANSLATE_NOOP(
+    "RadioVideo", "The queue can start when the conversion on the Convert tab finishes."
+)
+QUEUE_NOTHING_WAITING = QT_TRANSLATE_NOOP("RadioVideo", "No file is waiting.")
+QUEUE_SAVED = QT_TRANSLATE_NOOP("RadioVideo", "Saved · took {time}")
+QUEUE_CANCELED_AT = QT_TRANSLATE_NOOP("RadioVideo", "Canceled at {percent}%")
+QUEUE_CANT_READ = QT_TRANSLATE_NOOP("RadioVideo", "Can’t read this file")
+QUEUE_CUSTOM = QT_TRANSLATE_NOOP("RadioVideo", "{what} · Custom")
+QUEUE_DONE_PART = QT_TRANSLATE_NOOP("RadioVideo", "{count} done")
+QUEUE_CONVERTING_PART = QT_TRANSLATE_NOOP("RadioVideo", "{count} converting")
+QUEUE_WAITING_PART = QT_TRANSLATE_NOOP("RadioVideo", "{count} waiting")
+QUEUE_FAILED_PART = QT_TRANSLATE_NOOP("RadioVideo", "{count} failed")
+QUEUE_CANCELED_PART = QT_TRANSLATE_NOOP("RadioVideo", "{count} canceled")
+QUEUE_FINISHED_STATUS = QT_TRANSLATE_NOOP("RadioVideo", "Queue finished")
+QUEUE_RUNNING_STATUS = QT_TRANSLATE_NOOP(
+    "RadioVideo", "Converting file {current} of {total}… {percent}%"
+)
+QUEUE_TAB_COUNT = QT_TRANSLATE_NOOP("RadioVideo", "Queue · {count}")
+ADD_TO_QUEUE = QT_TRANSLATE_NOOP("RadioVideo", "Add to Queue")
+ADD_TO_QUEUE_TOOLTIP = QT_TRANSLATE_NOOP(
+    "RadioVideo",
+    "Convert this file later with these settings, after the files already in the queue "
+    "(Ctrl+Shift+Enter)",
+)
+QUEUE_ADDED = QT_TRANSLATE_NOOP("RadioVideo", "Added to the queue: {name}")
+QUEUE_ADD_DIALOG = QT_TRANSLATE_NOOP("RadioVideo", "Add Files to the Queue")
+CONVERT_BLOCKED_QUEUE = QT_TRANSLATE_NOOP(
+    "RadioVideo", "The queue is converting. Stop it on the Queue tab, or add this file to it."
+)
+NOTIFY_QUEUE_TITLE = QT_TRANSLATE_NOOP("RadioVideo", "Queue finished")
+QUIT_QUEUE_TITLE = QT_TRANSLATE_NOOP("RadioVideo", "Stop the queue and quit?")
 QUEUE_COLUMNS = (
     QT_TRANSLATE_NOOP("RadioVideo", "#"),
     QT_TRANSLATE_NOOP("RadioVideo", "File"),

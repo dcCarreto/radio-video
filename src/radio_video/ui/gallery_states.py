@@ -20,9 +20,10 @@ from radio_video.models.advanced import AdvancedChoices
 from radio_video.models.estimate import estimate_output_size
 from radio_video.models.hardware import NVENC, HardwareSupport
 from radio_video.models.media import MediaInfo
-from radio_video.models.presets import OUTPUT_FORMATS, OutputFormat
+from radio_video.models.presets import OUTPUT_FORMATS, OutputFormat, Quality
 from radio_video.services.preview import PreviewKind as ServiceKind
 from radio_video.services.preview import PreviewSample
+from radio_video.services.queue import QueueStatus
 from radio_video.ui import viewmodel as vm
 from radio_video.ui.demo import DEMO_FOLDER, DEMO_MEDIA
 from radio_video.ui.dialogs.failed_dialog import FailedDialog
@@ -154,6 +155,100 @@ def _advanced(tab: str) -> Callable[[MainWindow], None]:
 def _custom(window: MainWindow) -> None:
     _loaded(window)
     window.machine.set_advanced(AdvancedChoices(crf=20, preset="slow", height=720))
+
+
+# File, format, quality, status, fraction, size, took, error
+DEMO_QUEUE: tuple[
+    tuple[str, str, Quality, QueueStatus, float, int | None, float | None, str], ...
+] = (
+    (
+        "Interview – Lisbon Studio Session (Final Cut, 2026-03-14).mkv",
+        "mp4-h264",
+        Quality.BALANCED,
+        QueueStatus.DONE,
+        1.0,
+        22 * MB + 400 * 1024,
+        43.0,
+        "",
+    ),
+    (
+        "Rehearsal day 2 – wide camera.mov",
+        "mp4-h265",
+        Quality.SMALL,
+        QueueStatus.CONVERTING,
+        0.42,
+        None,
+        None,
+        "",
+    ),
+    ("Podcast ep. 41 – raw.wav", "mp3", Quality.BALANCED, QueueStatus.WAITING, 0, None, None, ""),
+    (
+        "B-roll_harbour_0412.mp4",
+        "webm-vp9",
+        Quality.BALANCED,
+        QueueStatus.FAILED,
+        0.3,
+        None,
+        None,
+        "No space left on device",
+    ),
+    (
+        "Voice memo 2026-02-11 08.14.m4a",
+        "opus",
+        Quality.BALANCED,
+        QueueStatus.WAITING,
+        0,
+        None,
+        None,
+        "",
+    ),
+    (
+        "Old family tape (VHS transfer).avi",
+        "mkv-h264",
+        Quality.HIGH,
+        QueueStatus.CANCELED,
+        0.18,
+        None,
+        None,
+        "",
+    ),
+)
+
+
+def _queue_demo(window: MainWindow) -> None:
+    """The design's example queue: one file of every status, the second one converting."""
+    _loaded(window)
+    queue = window.queue
+    if queue is None:
+        return
+    for name, key, quality, status, fraction, size, took, error in DEMO_QUEUE:
+        path = DEMO_FOLDER / name
+        if status is QueueStatus.FAILED:
+            # The source must exist, otherwise the failure reads as "the original was moved".
+            path = Path(tempfile.gettempdir()) / name
+            path.touch()
+        media = replace(DEMO_MEDIA, path=path)
+        entry = queue.add(media.path, key, quality, AdvancedChoices(), DEMO_FOLDER, media)
+        queue._replace(
+            replace(
+                entry,
+                status=status,
+                fraction=fraction,
+                size=size,
+                took=took,
+                error=error,
+                speed=3.1 if status is QueueStatus.CONVERTING else None,
+                remaining=25.0 if status is QueueStatus.CONVERTING else None,
+            )
+        )
+        if status is QueueStatus.CONVERTING:
+            queue._current = entry.id
+    queue._running = True
+    window.machine.go(Page.QUEUE)
+    window._render_queue()
+    page = window.queue_page
+    if page.view is not None:
+        page.select(page.view.rows[3].entry_id)
 
 
 def _page(page: Page) -> Callable[[MainWindow], None]:
@@ -305,7 +400,8 @@ STATES = (
     GalleryState("adv-tracks", "Advanced Mode: Tracks", _advanced("tracks")),
     GalleryState("adv-output", "Advanced Mode: Output and filters", _advanced("output")),
     GalleryState("custom", "Simple Mode after Advanced changes", _custom),
-    GalleryState("queue", "Queue (planned)", _page(Page.QUEUE)),
+    GalleryState("queue", "Queue: running, every status", _queue_demo),
+    GalleryState("queue-empty", "Queue: empty", _page(Page.QUEUE)),
     GalleryState("history", "History (planned)", _page(Page.HISTORY)),
     GalleryState("settings", "Settings (planned)", _page(Page.SETTINGS)),
 )

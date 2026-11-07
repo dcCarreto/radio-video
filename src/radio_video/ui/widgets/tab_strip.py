@@ -145,6 +145,13 @@ class TabStrip(QWidget):
         checked = self._group.checkedButton()
         return checked.spec.key if isinstance(checked, TabButton) else None
 
+    def set_label(self, key: str, text: str) -> None:
+        for button in self._buttons:
+            if button.spec.key == key and button.text() != text:
+                button.setText(text)
+                button.setAccessibleName(text)
+                button.updateGeometry()
+
     def set_current(self, key: str) -> None:
         for button in self._buttons:
             if button.spec.key == key:

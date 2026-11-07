@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 from PySide6.QtCore import QMimeData, QPointF, Qt, QUrl
 from PySide6.QtGui import QDragEnterEvent, QDropEvent
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QWidget
 from pytestqt.qtbot import QtBot
 
 from radio_video.ui.gallery_components import (
@@ -98,7 +98,10 @@ def test_check_drop_rules(tmp_path: Path) -> None:
     file.write_bytes(b"")
     assert check_drop([file], busy=False) is None
     assert check_drop([file], busy=True) is DropRefusal.BUSY
-    assert check_drop([file, file], busy=False) is DropRefusal.SEVERAL_FILES
+    # Several files go to the queue, even while converting.
+    assert check_drop([file, file], busy=False) is None
+    assert check_drop([file, file], busy=True) is None
+    assert check_drop([file, tmp_path], busy=False) is DropRefusal.FOLDER
     assert check_drop([], busy=False) is DropRefusal.SEVERAL_FILES
     assert check_drop([tmp_path], busy=False) is DropRefusal.FOLDER
 
@@ -139,11 +142,7 @@ def test_drop_zone_accepts_one_file(qtbot: QtBot, tmp_path: Path) -> None:
     assert zone.state is DropState.IDLE
 
 
-def test_drop_zone_explains_refusal(qtbot: QtBot, tmp_path: Path) -> None:
-    zone = make_drop_zone()
-    qtbot.addWidget(zone)
-    # Events do not own their mime data; keep it alive for the duration of the test.
-    mime = _mime(tmp_path / "a.mp4", tmp_path / "b.mp4")
+def _enter(zone: QWidget, mime: QMimeData) -> None:
     enter = QDragEnterEvent(
         QPointF(5, 5),
         Qt.DropAction.CopyAction,
@@ -152,9 +151,39 @@ def test_drop_zone_explains_refusal(qtbot: QtBot, tmp_path: Path) -> None:
         Qt.KeyboardModifier.NoModifier,
     )
     QApplication.sendEvent(zone, enter)
+
+
+def test_drop_zone_explains_refusal(qtbot: QtBot, tmp_path: Path) -> None:
+    zone = make_drop_zone()
+    qtbot.addWidget(zone)
+    # Events do not own their mime data; keep it alive for the duration of the test.
+    mime = _mime(tmp_path / "a.mp4", tmp_path)
+    _enter(zone, mime)
     assert zone.state is DropState.BLOCKED
-    assert "Drop one file at a time" in zone.blocked_text.text()
+    assert "Drop files, not folders" in zone.blocked_text.text()
     assert zone.title.text() == "Can’t open a file right now"
+
+
+def test_several_files_go_to_the_queue(qtbot: QtBot, tmp_path: Path) -> None:
+    zone = make_drop_zone()
+    qtbot.addWidget(zone)
+    files = [tmp_path / "a.mp4", tmp_path / "b.mp4"]
+    for file in files:
+        file.write_bytes(b"")
+    mime = _mime(*files)
+    _enter(zone, mime)
+    assert zone.state is DropState.OVER
+    assert zone.title.text() == "Release to add 2 files to the queue"
+    drop = QDropEvent(
+        QPointF(5, 5),
+        Qt.DropAction.CopyAction,
+        mime,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
+    )
+    with qtbot.waitSignal(zone.files_dropped) as blocker:
+        QApplication.sendEvent(zone, drop)
+    assert blocker.args == [files]
 
 
 def test_format_combo_groups_and_keys(qtbot: QtBot) -> None:

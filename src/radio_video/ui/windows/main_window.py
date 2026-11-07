@@ -8,7 +8,7 @@ import os
 import sys
 import time
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from functools import partial
 from pathlib import Path
 
@@ -53,7 +53,7 @@ from PySide6.QtWidgets import (
 from radio_video.ffmpeg.capabilities import CapabilityError, ffmpeg_version, list_encoders
 from radio_video.ffmpeg.locator import FFmpegNotFoundError, FFmpegTools, locate_tools
 from radio_video.ffmpeg.progress import ProgressUpdate
-from radio_video.models.advanced import EncoderChoice, Recipe, resolve
+from radio_video.models.advanced import AdvancedChoices, EncoderChoice, Recipe, resolve
 from radio_video.models.conversion import ConversionJob, ConversionSettings
 from radio_video.models.estimate import estimate_output_size
 from radio_video.models.hardware import HardwareSupport, accelerate
@@ -61,6 +61,7 @@ from radio_video.models.media import MediaInfo
 from radio_video.models.presets import OutputFormat, available_formats, format_by_key
 from radio_video.services.analysis import MediaAnalyzer
 from radio_video.services.conversion import ConversionError, ConversionRunner
+from radio_video.services.queue import ConversionQueue, FileReader, QueueEntry
 from radio_video.ui import icons, theme
 from radio_video.ui import strings as s
 from radio_video.ui import viewmodel as vm
@@ -75,7 +76,8 @@ from radio_video.ui.native.taskbar import TaskbarProgress, TaskbarState
 from radio_video.ui.pages.advanced_panel import AdvancedView, output_summary
 from radio_video.ui.pages.convert_page import ConvertPage
 from radio_video.ui.pages.convert_panel import PanelView
-from radio_video.ui.pages.planned_pages import HistoryPage, QueuePage, SettingsPage
+from radio_video.ui.pages.planned_pages import HistoryPage, SettingsPage
+from radio_video.ui.pages.queue_page import QueuePage, QueueView, counts_text, row_view
 from radio_video.ui.pages.start_view import make_drop_zone
 from radio_video.ui.state import (
     Dialog,
@@ -248,6 +250,10 @@ class MainWindow(QMainWindow):
 
         self.analyzer: MediaAnalyzer | None = None
         self.runner: ConversionRunner | None = None
+        self.queue: ConversionQueue | None = None
+        self.reader: FileReader | None = None
+        # Files dragged over the window, to word the drop overlay.
+        self._drag_count = 1
         self._create_services()
         self._create_ui()
         self._create_actions()
@@ -280,12 +286,21 @@ class MainWindow(QMainWindow):
         self.runner.succeeded.connect(self._on_conversion_succeeded)
         self.runner.failed.connect(self._on_conversion_failed)
         self.runner.canceled.connect(self._on_conversion_canceled)
+        # The queue has its own runner; only one of the two converts at a time.
+        self.queue = ConversionQueue(
+            ConversionRunner(tools.ffmpeg, parent=self), self._queue_job, parent=self
+        )
+        self.queue.changed.connect(self._render_queue)
+        self.queue.progressed.connect(self._on_queue_progress)
+        self.queue.run_finished.connect(self._on_queue_finished)
+        self.reader = FileReader(tools.ffprobe, parent=self)
+        self.reader.read.connect(self._on_queue_file_read)
 
     def _create_ui(self) -> None:
         self.tabs = TabStrip(
             [
                 TabSpec("main", tr(s.TAB_CONVERT), "ArrowRightLeft"),
-                TabSpec("queue", tr(s.TAB_QUEUE), "ListOrdered", True, tr(s.BADGE_PLANNED)),
+                TabSpec("queue", tr(s.TAB_QUEUE), "ListOrdered"),
                 TabSpec("history", tr(s.TAB_HISTORY), "History", True, tr(s.BADGE_PLANNED)),
                 TabSpec(
                     "settings", tr(s.TAB_SETTINGS), "Settings", True, tr(s.BADGE_PLANNED), True
@@ -297,6 +312,7 @@ class MainWindow(QMainWindow):
         self.drop_zone = make_drop_zone(lambda: not self.machine.can_open())
         self.drop_zone.open_requested.connect(self.open_file_dialog)
         self.drop_zone.file_dropped.connect(self.open_file)
+        self.drop_zone.files_dropped.connect(self.add_files_to_queue)
         self.overlay = make_drop_zone(show_open_button=False)
         self.convert_page = ConvertPage(self.drop_zone, self.overlay)
         page = self.convert_page
@@ -314,12 +330,21 @@ class MainWindow(QMainWindow):
         panel.show_in_folder_requested.connect(self.show_output_in_folder)
         panel.done_requested.connect(self.machine.dismiss_result)
         panel.reset_requested.connect(self.machine.reset_advanced)
+        panel.queue_requested.connect(self.add_current_to_queue)
         panel.advanced.choices_changed.connect(self.machine.set_advanced)
         panel.advanced.format_changed.connect(self._on_format_changed)
 
         self.pages = QStackedWidget()
         self.pages.addWidget(self.convert_page)
         self.queue_page = QueuePage()
+        self.queue_page.add_requested.connect(self.add_files_dialog)
+        self.queue_page.start_requested.connect(self.start_queue)
+        self.queue_page.stop_requested.connect(self.stop_queue)
+        self.queue_page.pause_toggled.connect(self._on_queue_pause)
+        self.queue_page.move_requested.connect(self._on_queue_move)
+        self.queue_page.retry_requested.connect(self._on_queue_retry)
+        self.queue_page.remove_requested.connect(self._on_queue_remove)
+        self.queue_page.clear_requested.connect(self._on_queue_clear)
         self.history_page = HistoryPage()
         self.settings_page = SettingsPage(
             self.engine.tools, self.engine.version, hardware_enabled=self.hardware_enabled
@@ -373,6 +398,8 @@ class MainWindow(QMainWindow):
 
         shortcut("Ctrl+Return", self.start_conversion)
         shortcut("Ctrl+Enter", self.start_conversion)
+        shortcut("Ctrl+Shift+Return", self.add_current_to_queue)
+        shortcut("Ctrl+Shift+Enter", self.add_current_to_queue)
         shortcut("Ctrl+P", lambda: self.open_preview(PreviewKind.SAMPLE))
         shortcut("Ctrl+Shift+P", lambda: self.open_preview(PreviewKind.FULL))
         shortcut("Ctrl+Shift+Space", lambda: self.open_preview(PreviewKind.ORIGINAL))
@@ -425,7 +452,9 @@ class MainWindow(QMainWindow):
                 tr(s.DROP_BLOCKED_CONVERTING) if state.converting else tr(s.DROP_BLOCKED_SEVERAL)
             )
             self.overlay.set_state(
-                DropState.OVER if state.drop is Drop.OVER else DropState.BLOCKED, reason
+                DropState.OVER if state.drop is Drop.OVER else DropState.BLOCKED,
+                reason,
+                self._drag_count,
             )
         file_view.set_overlay_visible(overlay)
         previous_job = self._last_job
@@ -510,6 +539,7 @@ class MainWindow(QMainWindow):
             if state.mode is Mode.ADVANCED
             else "",
             custom=not state.advanced.is_default,
+            queue_busy=self.queue is not None and self.queue.running,
         )
 
     def _render_status(self, state: UiState) -> None:
@@ -518,6 +548,8 @@ class MainWindow(QMainWindow):
         elif state.converting:
             percent = vm.percent(state.progress.fraction)
             self.status_item.show_status(tr(s.STATUS_CONVERTING).format(percent=percent), busy=True)
+        elif self.queue is not None and self.queue.running:
+            self.status_item.show_status(self._queue_status_text(), busy=True)
         elif state.previewing and state.preview is not None:
             percent = vm.percent(state.preview.progress.fraction)
             self.status_item.show_status(tr(s.STATUS_PREVIEWING).format(percent=percent), busy=True)
@@ -531,7 +563,10 @@ class MainWindow(QMainWindow):
         )
 
     def _render_taskbar(self, state: UiState) -> None:
-        if state.job is Job.STARTING:
+        if self.queue is not None and self.queue.running and not state.converting:
+            self.taskbar.set_state(TaskbarState.NORMAL)
+            self.taskbar.set_fraction(self.queue.overall_fraction())
+        elif state.job is Job.STARTING:
             self.taskbar.set_state(TaskbarState.INDETERMINATE)
         elif state.job is Job.CONVERTING:
             self.taskbar.set_state(TaskbarState.NORMAL)
@@ -717,13 +752,18 @@ class MainWindow(QMainWindow):
 
     # Drag and drop over the window
     def _drag_allowed(self) -> bool:
-        return self.machine.state.screen is Screen.MAIN
+        return self.machine.state.screen in (Screen.MAIN, Screen.QUEUE)
 
     def dragEnterEvent(self, event: QDragEnterEvent) -> None:  # noqa: N802
         if not self._drag_allowed() or not event.mimeData().hasUrls():
             return
         event.accept()
-        refusal = check_drop(dropped_paths(event), not self.machine.can_open())
+        paths = dropped_paths(event)
+        self._drag_count = len(paths)
+        refusal = check_drop(paths, not self.machine.can_open())
+        if self.machine.state.screen is Screen.QUEUE and paths:
+            # On the Queue tab every file goes to the queue.
+            refusal = check_drop([*paths, *paths], busy=False)
         self.machine.drag_over(accepted=refusal is None)
 
     def dragMoveEvent(self, event: QDragMoveEvent) -> None:  # noqa: N802
@@ -737,11 +777,15 @@ class MainWindow(QMainWindow):
 
     def dropEvent(self, event: QDropEvent) -> None:  # noqa: N802
         paths = dropped_paths(event)
-        allowed = check_drop(paths, not self.machine.can_open()) is None
+        to_queue = len(paths) > 1 or self.machine.state.screen is Screen.QUEUE
+        allowed = check_drop(paths, busy=not to_queue and not self.machine.can_open()) is None
         self.machine.drag_left()
         if allowed:
             event.acceptProposedAction()
-            self.open_file(paths[0])
+            if to_queue:
+                self.add_files_to_queue(paths)
+            else:
+                self.open_file(paths[0])
 
     # Conversion
     @Slot()
@@ -752,6 +796,9 @@ class MainWindow(QMainWindow):
             return
         state = self.machine.state
         if state.screen is not Screen.MAIN or state.converting or self._dialog is not None:
+            return
+        if self.queue is not None and self.queue.running:
+            self.statusBar().showMessage(tr(s.CONVERT_BLOCKED_QUEUE), STATUS_MESSAGE_MS)
             return
         fmt = self.current_format(state)
         folder = self.session.folder or media.path.parent
@@ -892,6 +939,175 @@ class MainWindow(QMainWindow):
             self.preview_window.close()
         self.start_conversion()
 
+    # Queue
+    def add_current_to_queue(self) -> None:
+        """Queue the open file with the current format, quality and Advanced choices."""
+        media = self.session.media
+        state = self.machine.state
+        if self.queue is None or media is None or state.screen is not Screen.MAIN:
+            return
+        folder = self.session.folder or media.path.parent
+        if not self.folder_writable(folder):
+            return
+        fmt = self.current_format(state)
+        self.queue.add(media.path, fmt.key, state.quality, state.advanced, folder, media)
+        self.statusBar().showMessage(
+            tr(s.QUEUE_ADDED).format(name=media.path.name), STATUS_MESSAGE_MS
+        )
+
+    def add_files_dialog(self) -> None:
+        start = str(self.session.media.path.parent) if self.session.media else ""
+        filenames, _ = QFileDialog.getOpenFileNames(
+            self, tr(s.QUEUE_ADD_DIALOG), start, open_file_filter()
+        )
+        if filenames:
+            self.add_files_to_queue([Path(name) for name in filenames])
+
+    def add_files_to_queue(self, paths: list[Path]) -> None:
+        """Read the files in the background; each one joins the queue when read."""
+        if self.reader is None:
+            return
+        self.reader.read_files(paths)
+        self.machine.go(Page.QUEUE)
+
+    @Slot(Path, object)
+    def _on_queue_file_read(self, path: Path, result: MediaInfo | str) -> None:
+        if self.queue is None:
+            return
+        state = self.machine.state
+        # Track choices belong to the open file; the rest carries over.
+        choices = replace(state.advanced, tracks=None)
+        if isinstance(result, MediaInfo):
+            formats = available_formats(self.engine.encoders, result.has_video)
+            keys = [fmt.key for fmt in formats]
+            key = state.format_key if state.format_key in keys else (keys[0] if keys else "")
+            folder = self.session.folder or self.default_folder(result)
+            if key:
+                self.queue.add(path, key, state.quality, choices, folder, result)
+                return
+            result = tr(s.QUEUE_CANT_READ)
+        self.queue.add(path, state.format_key, state.quality, choices, path.parent, None, result)
+
+    def _queue_job(self, entry: QueueEntry) -> ConversionJob:
+        media = entry.media
+        if media is None:
+            raise ValueError(entry.error or tr(s.QUEUE_CANT_READ))
+        if not self.folder_writable(entry.folder):
+            raise ValueError(tr(s.FOLDER_NOT_WRITABLE))
+        fmt = format_by_key(entry.format_key)
+        recipe = resolve(fmt, entry.quality, media, entry.choices)
+        return ConversionJob(
+            source=entry.path,
+            destination=self.output_namer(entry.folder, media, fmt).path,
+            settings=self.final_settings_for(recipe, entry.choices),
+            duration=media.duration,
+            streams=recipe.streams,
+        )
+
+    def start_queue(self) -> None:
+        if self.queue is None or self.machine.state.converting:
+            return
+        if self.queue.start():
+            self.notifier.conversion_started()
+
+    def stop_queue(self) -> None:
+        if self.queue is not None:
+            self.queue.stop()
+
+    def _on_queue_pause(self, pause: bool) -> None:
+        if self.queue is not None:
+            self.queue.pause_after_current = pause
+
+    def _on_queue_move(self, entry_id: int, delta: int) -> None:
+        if self.queue is not None:
+            self.queue.move(entry_id, delta)
+
+    def _on_queue_retry(self, entry_id: int) -> None:
+        if self.queue is not None:
+            self.queue.retry(entry_id)
+
+    def _on_queue_remove(self, entry_id: int) -> None:
+        if self.queue is not None:
+            self.queue.remove(entry_id)
+
+    def _on_queue_clear(self) -> None:
+        if self.queue is not None:
+            self.queue.clear_finished()
+
+    def queue_view(self) -> QueueView:
+        queue = self.queue
+        if queue is None:
+            return QueueView((), False, False, tr(s.STATUS_ENGINE_MISSING), False, None, 0, 0, "")
+        entries = queue.entries
+        current = queue.current
+        position = (
+            next(i for i, e in enumerate(entries, start=1) if e.id == current.id)
+            if current is not None
+            else None
+        )
+        blocked = ""
+        if self.machine.state.converting:
+            blocked = tr(s.QUEUE_START_BLOCKED)
+        elif not queue.can_start():
+            blocked = tr(s.QUEUE_NOTHING_WAITING)
+        return QueueView(
+            rows=tuple(row_view(entry) for entry in entries),
+            running=queue.running,
+            can_start=queue.can_start() and not self.machine.state.converting,
+            start_blocked=blocked,
+            pause_after=queue.pause_after_current,
+            current=position,
+            total=len(entries),
+            fraction=queue.overall_fraction(),
+            counts=counts_text(queue.counts()),
+        )
+
+    def _render_queue(self) -> None:
+        self.queue_page.show_view(self.queue_view())
+        queue = self.queue
+        active = 0
+        if queue is not None:
+            counts = queue.counts()
+            active = counts.waiting + counts.converting
+        label = tr(s.QUEUE_TAB_COUNT).format(count=active) if active else tr(s.TAB_QUEUE)
+        self.tabs.set_label("queue", label)
+        state = self.machine.state
+        if state.screen is Screen.MAIN and self.session.media is not None:
+            self.convert_page.file.panel.apply_view(self.panel_view(state, self.session.media))
+        self._render_status(state)
+        self._render_taskbar(state)
+
+    @Slot(int)
+    def _on_queue_progress(self, entry_id: int) -> None:
+        queue = self.queue
+        entry = queue.entry(entry_id) if queue is not None else None
+        if queue is None or entry is None:
+            return
+        self.queue_page.update_row(row_view(entry), queue.overall_fraction())
+        self._render_status(self.machine.state)
+        self._render_taskbar(self.machine.state)
+
+    def _queue_status_text(self) -> str:
+        queue = self.queue
+        if queue is None or queue.current is None:
+            return tr(s.QUEUE_TITLE)
+        position = next(i for i, e in enumerate(queue.entries, start=1) if e.id == queue.current.id)
+        return tr(s.QUEUE_RUNNING_STATUS).format(
+            current=position,
+            total=len(queue.entries),
+            percent=vm.percent(queue.overall_fraction()),
+        )
+
+    @Slot()
+    def _on_queue_finished(self) -> None:
+        if self.queue is None:
+            return
+        counts = self.queue.counts()
+        if counts.waiting == 0 and counts.converting == 0:
+            self.notifier.queue_finished(counts_text(counts), counts.failed > 0)
+        else:
+            self.notifier.conversion_stopped()
+
     # Engine
     @Slot()
     def check_engine_again(self) -> None:
@@ -931,7 +1147,12 @@ class MainWindow(QMainWindow):
         switch decides.
         """
         state = state or self.machine.state
-        encoder = state.advanced.encoder
+        return self.final_settings_for(recipe, state.advanced, software=software)
+
+    def final_settings_for(
+        self, recipe: Recipe, choices: AdvancedChoices, *, software: bool = False
+    ) -> ConversionSettings:
+        encoder = choices.encoder
         use_card = encoder is EncoderChoice.HARDWARE or (
             encoder is EncoderChoice.AUTO and self.hardware_enabled
         )
@@ -1006,6 +1227,17 @@ class MainWindow(QMainWindow):
             if dialog.exec() != QDialog.DialogCode.Accepted:
                 event.ignore()
                 return
+        queue = self.queue
+        if not self._quitting and queue is not None and queue.running:
+            current = queue.current
+            name = current.path.name if current is not None else ""
+            percent = vm.percent(current.fraction if current is not None else 0.0)
+            if QuitDialog.for_queue(name, percent, self).exec() != QDialog.DialogCode.Accepted:
+                event.ignore()
+                return
+        if queue is not None and queue.running:
+            queue.stop()
+            queue.runner.wait()
         if self.preview_window is not None:
             self.preview_window.close()
         if self.runner is not None and self.runner.is_running:

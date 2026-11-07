@@ -37,7 +37,8 @@ control over encoding parameters, tracks and filters.
 - Main window in a light or dark theme that follows Windows, with a step strip (Open, Check,
   Choose, Preview, Convert) and a status bar showing the conversion engine:
   - Start screen: drop a file or open it with the button or Ctrl+O. Reading the file runs in the
-    background. Several files, folders and drops during a conversion are refused with the reason.
+    background. Several files go to the queue; folders, and a single file dropped during a
+    conversion, are refused with the reason.
   - When FFmpeg is missing, a one-time setup page shows the winget command (with Copy), the
     environment variables for a custom location and a Check Again button.
   - A loaded file shows a plain-language summary ("1 video track, 3 audio tracks (Portuguese,
@@ -47,7 +48,7 @@ control over encoding parameters, tracks and filters.
     and stays available during a conversion. The original and converted previews link to each
     other for a quick comparison.
   - Keyboard: Ctrl+O, Ctrl+Enter (convert), Ctrl+P and Ctrl+Shift+P (previews),
-    Ctrl+Shift+Space (play the original), Esc (cancel),
+    Ctrl+Shift+Space (play the original), Ctrl+Shift+Enter (add to the queue), Esc (cancel),
     Ctrl+1–4 (tabs), F1 (About); a visible focus ring for keyboard use.
   - Conversion progress also shows on the taskbar button, and a notification reports the result
     when the window is in the background.
@@ -100,9 +101,23 @@ control over encoding parameters, tracks and filters.
   - Back in Simple Mode, "Quality: Custom (set in Advanced)" shows with a Reset to Balanced
     button. Choosing a quality resets the quality levels; switching formats resets the
     codec-specific choices and tracks.
-- Planned screens show how upcoming features will work, under a "Planned" banner: Queue,
-  History and Settings. Their settings don't act yet, except the hardware acceleration switch
-  in Settings.
+- Queue: convert many files one after another, each with its own format, quality and Advanced
+  choices.
+  - Add files with **Add Files…**, by dropping several files on the window (also during a
+    conversion), or with **Add to Queue** (Ctrl+Shift+Enter) on the Convert tab, which keeps
+    every setting of the open file. Files are read in the background; unreadable ones are
+    listed with the reason.
+  - Each row shows the target format, a status badge, live progress or the result (time taken,
+    the reason for a failure, where it was canceled) and the size: estimated while waiting
+    when the bitrate fixes it, measured when done.
+  - Start Queue / Stop Queue, Pause after the current file, Move Up/Down (Alt+Up/Down),
+    Retry, Remove (Delete) and Clear Finished. The footer shows "File 2 of 6", overall
+    progress and the counts per status; the tab shows how many files are left.
+  - Only one conversion runs at a time: Convert is unavailable while the queue runs, and the
+    queue can start once a conversion on the Convert tab finishes. Progress shows in the status bar and on the
+    taskbar, a notification reports when the queue finishes, and quitting asks first.
+- Planned screens show how upcoming features will work, under a "Planned" banner: History and
+  Settings. Their settings don't act yet, except the hardware acceleration switch in Settings.
 - Converted preview window:
   - **Preview 15 s** converts a 15-second sample, starting a third of the way into the file, with
     the exact settings. Files of 15 seconds or less are converted entirely. **Full Preview**
@@ -120,7 +135,7 @@ control over encoding parameters, tracks and filters.
 
 ## Planned Features
 
-- Batch conversion, conversion queue and conversion history.
+- Conversion history.
 
 ## Technology Stack
 

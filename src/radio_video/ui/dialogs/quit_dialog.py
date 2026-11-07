@@ -43,6 +43,16 @@ class QuitDialog(Dialog):
         )
 
     @classmethod
+    def for_queue(cls, name: str, percent: int, parent: QWidget | None = None) -> QuitDialog:
+        return cls(
+            tr(s.QUIT_QUEUE_TITLE),
+            tr(s.QUIT_TEXT).format(name=name, percent=percent),
+            tr(s.KEEP_CONVERTING),
+            tr(s.STOP_AND_QUIT),
+            parent,
+        )
+
+    @classmethod
     def for_preview(cls, parent: QWidget | None = None) -> QuitDialog:
         return cls(
             tr(s.QUIT_PREVIEW_TITLE),

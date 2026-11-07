@@ -818,6 +818,8 @@ class AdvancedPanel(QFrame):
 
     def _rebuild_tracks(self, view: AdvancedView) -> None:
         if self.tracks_table is not None:
+            # Hidden at once: deleteLater only runs when control returns to the event loop.
+            self.tracks_table.hide()
             self.tracks_box.removeWidget(self.tracks_table)
             self.tracks_table.deleteLater()
         self.track_checks, self.track_outputs = {}, {}

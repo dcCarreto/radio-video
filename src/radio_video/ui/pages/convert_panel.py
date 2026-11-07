@@ -73,6 +73,8 @@ class PanelView:
     summary: str = ""
     # Advanced choices are in effect: Simple shows "Custom" with a way back.
     custom: bool = False
+    # The queue is converting: this panel can add to it but not convert itself.
+    queue_busy: bool = False
 
     @property
     def locked(self) -> bool:
@@ -185,6 +187,7 @@ class ConvertPanel(QFrame):
     show_in_folder_requested = Signal()
     done_requested = Signal()
     reset_requested = Signal()
+    queue_requested = Signal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -287,6 +290,11 @@ class ConvertPanel(QFrame):
             block=True,
         )
         self.convert.clicked.connect(self.convert_requested)
+        self.add_to_queue = Button(
+            tr(s.ADD_TO_QUEUE), ButtonKind.SUBTLE, icon="ListOrdered", block=True
+        )
+        self.add_to_queue.setToolTip(tr(s.ADD_TO_QUEUE_TOOLTIP))
+        self.add_to_queue.clicked.connect(self.queue_requested)
         idle = QWidget()
         idle_layout = QVBoxLayout(idle)
         idle_layout.setContentsMargins(0, 0, 0, 0)
@@ -302,6 +310,7 @@ class ConvertPanel(QFrame):
         idle_layout.addLayout(_pair(self.preview_short, self.preview_full))
         idle_layout.addWidget(self.preview_help)
         idle_layout.addWidget(self.convert)
+        idle_layout.addWidget(self.add_to_queue)
 
         self.progress = ProgressBlock()
         self.progress_text = label("", TextStyle.BODY_STRONG)
@@ -395,7 +404,9 @@ class ConvertPanel(QFrame):
         self.output.apply_view(view)
         for widget in (self.mode, self.format, self.quality, self.browse):
             widget.setEnabled(not locked)
-        self.convert.setEnabled(not view.folder_error)
+        self.convert.setEnabled(not view.folder_error and not view.queue_busy)
+        self.convert.setToolTip(tr(s.CONVERT_BLOCKED_QUEUE) if view.queue_busy else "")
+        self.add_to_queue.setEnabled(not view.folder_error)
         self._render_footer(view)
 
     def _render_footer(self, view: PanelView) -> None:
