@@ -22,10 +22,13 @@ import shutil
 import struct
 import subprocess
 import sys
+import time
+import urllib.error
 import urllib.request
 import zipfile
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from http import HTTPStatus
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -37,6 +40,8 @@ FFMPEG_RELEASE = "latest"
 FFMPEG_SERIES = "9.0"
 FFMPEG_VARIANT = "win64-gpl-shared"
 FFMPEG_SOURCE_REPOSITORY = "FFmpeg/FFmpeg"
+DOWNLOAD_ATTEMPTS = 4
+DOWNLOAD_RETRY_SECONDS = 60.0
 BUNDLED_FOLDER = "ffmpeg"
 ICON_SIZES = (16, 20, 24, 32, 40, 48, 64, 256)
 INNO_LOCATIONS = (
@@ -229,10 +234,35 @@ class FFmpegBundle:
     builds_commit: str
 
 
+def download_latest_ffmpeg(
+    work: Path,
+    series: str,
+    variant: str,
+    *,
+    attempts: int = DOWNLOAD_ATTEMPTS,
+    wait: float = DOWNLOAD_RETRY_SECONDS,
+) -> tuple[Path, Asset]:
+    """Download the newest build, asking for the release again when an asset vanished.
+
+    The "latest" release is rebuilt every day: its assets are deleted and uploaded again, so
+    a link read a moment earlier can answer 404 for a few minutes.
+    """
+    for attempt in range(1, attempts + 1):
+        release = github_json(f"repos/{FFMPEG_REPOSITORY}/releases/tags/{FFMPEG_RELEASE}")
+        try:
+            asset = select_asset(release, ffmpeg_asset_name(series, variant))
+            return download(asset.url, work / asset.name), asset
+        except (BuildError, urllib.error.HTTPError) as exc:
+            missing = isinstance(exc, BuildError) or exc.code == HTTPStatus.NOT_FOUND
+            if not missing or attempt == attempts:
+                raise
+            print(f"FFmpeg build not available ({exc}); asking again in {wait:g} s")
+            time.sleep(wait)
+    raise BuildError("FFmpeg could not be downloaded")
+
+
 def add_ffmpeg(app: Path, work: Path, series: str, variant: str) -> FFmpegBundle:
-    release = github_json(f"repos/{FFMPEG_REPOSITORY}/releases/tags/{FFMPEG_RELEASE}")
-    asset = select_asset(release, ffmpeg_asset_name(series, variant))
-    archive = download(asset.url, work / asset.name)
+    archive, asset = download_latest_ffmpeg(work, series, variant)
     verify_digest(archive, asset.digest)
 
     target = app / BUNDLED_FOLDER
