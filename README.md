@@ -133,6 +133,12 @@ control over encoding parameters, tracks and filters.
   - Performance: hardware acceleration on or off, naming the detected graphics card.
   - Temporary files: the folder previews are made in.
   - Appearance: follow Windows, light or dark, applied at once.
+  - Updates: Update automatically (on by default) checks the latest GitHub release when the app
+    starts, downloads the new installer in the background and verifies it against the SHA-256
+    published with the release. It then offers Restart and Update, which installs and opens
+    the app again; otherwise the update installs when the app closes. Check Now and Help →
+    Check for Updates… check at any time, and What's New opens the release page. Copies not
+    set up with the installer open the download page instead.
 - Converted preview window:
   - **Preview 15 s** converts a 15-second sample, starting a third of the way into the file, with
     the exact settings. Files of 15 seconds or less are converted entirely. **Full Preview**
@@ -239,7 +245,8 @@ Each [GitHub release](https://github.com/dcCarreto/radio-video/releases) include
 
 - `Radio-Video-Setup-<version>.exe`: the Windows installer (64-bit Windows 10 or 11), with FFmpeg
   included. It installs for the current user without administrator rights, or for all users,
-  and adds a Start menu shortcut and an uninstaller.
+  and adds a Start menu shortcut and an uninstaller. From 0.5.0, installed copies update
+  themselves from later releases (Settings → Updates).
 - The FFmpeg source and build scripts that correspond to the bundled FFmpeg.
 - A wheel and a source distribution, for installing with pip (Python 3.11 or newer, FFmpeg
   installed separately):
