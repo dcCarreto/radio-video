@@ -2,10 +2,11 @@
 
 Radio/Video is a free and open-source desktop application for converting audio and video files
 between formats. It uses [FFmpeg](https://ffmpeg.org/) for all media processing and provides a
-Qt-based interface. Simple Mode covers common conversions with presets; an Advanced Mode with full
-control over encoding parameters is planned.
+Qt-based interface. Simple Mode covers common conversions with presets; Advanced Mode gives full
+control over encoding parameters, tracks and filters.
 
-> **Status:** early development. Media analysis, Simple Mode conversion and previews work; see
+> **Status:** early development. Media analysis, Simple and Advanced Mode conversion and previews
+> work; see
 > [Current Features](#current-features) for details and [Planned Features](#planned-features)
 > for what is still missing.
 
@@ -84,10 +85,24 @@ control over encoding parameters is planned.
     as a button and the technical details one click away.
   - Settings and opening other files are locked while a conversion runs, and closing the window
     asks for confirmation.
-- Planned screens show how upcoming features will work, under a "Planned" banner: Advanced Mode
-  (Video, Audio, Tracks and Output and filters, each setting explained, with a live output
-  summary; Ctrl+M switches mode), Queue, History and Settings. Their settings don't act yet,
-  except the hardware acceleration switch in Settings.
+- Advanced Mode (Ctrl+M switches mode), each setting explained with its recommended value and
+  a live output summary; Simple choices carry over:
+  - Video: stream copy (offered only when the container can hold the source codec), software or
+    graphics card encoder, constant quality (CRF) or target bitrate, preset, resolution (never
+    upscaled), aspect ratio, frame rate and pixel format (including 10-bit for H.265 and VP9).
+  - Audio: codec (only those the container can hold, or a copy of the original), bitrate,
+    sample rate and channels, applied to every kept audio track.
+  - Tracks: keep or leave out each track; tracks the format can't hold are disabled with the
+    reason, and audio-only formats keep one audio track.
+  - Output and filters: container (MP4 or MKV for the same codecs), deinterlacing (automatic
+    for frames marked as interlaced, off or always), fast start for web playback, metadata
+    and chapters, and loudness normalization (EBU R128).
+  - Back in Simple Mode, "Quality: Custom (set in Advanced)" shows with a Reset to Balanced
+    button. Choosing a quality resets the quality levels; switching formats resets the
+    codec-specific choices and tracks.
+- Planned screens show how upcoming features will work, under a "Planned" banner: Queue,
+  History and Settings. Their settings don't act yet, except the hardware acceleration switch
+  in Settings.
 - Converted preview window:
   - **Preview 15 s** converts a 15-second sample, starting a third of the way into the file, with
     the exact settings. Files of 15 seconds or less are converted entirely. **Full Preview**
@@ -105,10 +120,7 @@ control over encoding parameters is planned.
 
 ## Planned Features
 
-- Advanced Mode: video and audio codecs, bitrate, CRF, resolution, aspect ratio, frame rate,
-  pixel format, sample rate, channels, filters, track selection and container options.
 - Batch conversion, conversion queue and conversion history.
-- Stream copy when re-encoding is not needed.
 
 ## Technology Stack
 

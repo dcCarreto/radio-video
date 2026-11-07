@@ -9,6 +9,7 @@ from radio_video.models.conversion import ConversionSettings
 # Every hardware encoder accepts NV12, the same 8-bit 4:2:0 picture as yuv420p; Quick Sync
 # accepts nothing else.
 HARDWARE_PIXEL_FORMAT = "nv12"
+SOFTWARE_PIXEL_FORMAT = "yuv420p"
 
 
 @dataclass(frozen=True)
@@ -77,21 +78,31 @@ class HardwareSupport:
 def accelerate(settings: ConversionSettings, support: HardwareSupport | None) -> ConversionSettings:
     """``settings`` with the video encoded on the graphics card, when it can be.
 
-    Only constant-quality video settings are moved: the CRF becomes the encoder's quality
-    level. Everything else, including audio, is unchanged.
+    Constant quality moves the CRF to the encoder's quality level; a target bitrate is kept.
+    Only 8-bit 4:2:0 pictures move: other pixel formats stay in software. Everything else,
+    including audio and filters, is unchanged.
     """
     video = settings.video
-    if support is None or video is None or video.crf is None:
+    if support is None or video is None or video.is_copy:
+        return settings
+    if video.crf is None and not video.bitrate:
+        return settings
+    if video.pixel_format not in (None, SOFTWARE_PIXEL_FORMAT):
         return settings
     encoder = support.encoder_for(video.codec)
     if encoder is None:
         return settings
+    crf: int | None = None
+    bitrate = video.bitrate
+    if video.crf is not None:
+        crf = max(1, video.crf + encoder.quality_offset)
+        bitrate = 0 if encoder.unlimited_bitrate else video.bitrate
     hardware = replace(
         video,
         codec=encoder.name,
-        crf=max(1, video.crf + encoder.quality_offset),
+        crf=crf,
         preset=encoder.preset,
-        bitrate=0 if encoder.unlimited_bitrate else video.bitrate,
+        bitrate=bitrate,
         pixel_format=HARDWARE_PIXEL_FORMAT,
     )
     return replace(settings, video=hardware)

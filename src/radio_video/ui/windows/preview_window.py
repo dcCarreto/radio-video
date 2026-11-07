@@ -30,6 +30,7 @@ from radio_video.ffmpeg.progress import ProgressUpdate
 from radio_video.models.conversion import ConversionSettings
 from radio_video.models.media import MediaInfo
 from radio_video.models.presets import OutputFormat, Quality
+from radio_video.models.tracks import StreamMap
 from radio_video.services.conversion import ConversionError
 from radio_video.services.preview import PreviewGenerator, PreviewSample, short_preview_range
 from radio_video.services.preview import PreviewKind as ServiceKind
@@ -83,6 +84,11 @@ class PreviewRequest:
     calculated_size: int | None = None
     # The settings to convert with; the format's own settings when not given.
     settings: ConversionSettings | None = None
+    # The tracks to map; the format's own choice when not given.
+    streams: StreamMap | None = None
+
+    def plan(self) -> StreamMap:
+        return self.streams if self.streams is not None else self.fmt.plan(self.media)
 
 
 class _Area(QFrame):
@@ -316,7 +322,7 @@ class PreviewWindow(QWidget):
         if self.original:
             text = vm.source_summary(media)
         else:
-            track = vm.output_track_text(fmt, media, fmt.plan(media))
+            track = vm.output_track_text(fmt, media, self.request.plan())
             text = tr(s.PREVIEW_AUDIO_TEXT).format(settings=what, track=track)
         self.audio_text = label(text, tone="secondary", wrap=True)
         layout.addWidget(self.audio_text)
@@ -417,7 +423,7 @@ class PreviewWindow(QWidget):
                 request.settings or request.fmt.settings(request.quality),
                 request.fmt.extension,
                 kind,
-                request.fmt.plan(request.media),
+                request.plan(),
             )
         except (ConversionError, ValueError, OSError) as exc:
             self._show_failure(str(exc))

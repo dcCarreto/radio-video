@@ -105,7 +105,9 @@ class FormatDelegate(QStyledItemDelegate):
         if index.data(KIND_ROLE) == HEADER:
             return QSize(width, HEADER_HEIGHT)
         description = str(index.data(DESCRIPTION_ROLE) or "")
-        lines = self._description_rect(description, width).height() if description else 0
+        if not description:
+            return QSize(width, ITEM_PADDING_Y * 2 + 20)
+        lines = self._description_rect(description, width).height()
         return QSize(width, ITEM_PADDING_Y * 2 + 20 + max(lines, 16))
 
     def paint(self, painter: QPainter, option: QStyleOptionViewItem, index: IndexLike) -> None:
@@ -310,3 +312,45 @@ class FormatCombo(QComboBox):
             "ChevronDown",
             color,
         )
+
+
+@dataclass(frozen=True)
+class Choice:
+    key: str
+    name: str
+    description: str = ""
+    recommended: bool = False
+
+
+class ChoiceCombo(FormatCombo):
+    """The format picker's look for a plain list of choices, without group headers.
+
+    ``format_changed`` carries the chosen key.
+    """
+
+    def __init__(self, accessible_name: str = "", parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._choices: tuple[Choice, ...] = ()
+        if accessible_name:
+            self.setAccessibleName(accessible_name)
+
+    def set_choices(self, choices: list[Choice] | tuple[Choice, ...], current: str) -> None:
+        """Replace the list (only when it changed) and select ``current`` without signals."""
+        self.blockSignals(True)
+        if tuple(choices) != self._choices:
+            self._choices = tuple(choices)
+            self._model.clear()
+            for choice in choices:
+                item = QStandardItem(choice.name)
+                item.setData(OPTION, KIND_ROLE)
+                item.setData(choice.key, KEY_ROLE)
+                item.setData(choice.description, DESCRIPTION_ROLE)
+                item.setData(choice.recommended, RECOMMENDED_ROLE)
+                item.setFlags(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable)
+                self._model.appendRow(item)
+            self.setMaxVisibleItems(max(len(choices), 1))
+        row = self._row_for(current)
+        self.setCurrentIndex(row if row >= 0 else 0)
+        self.setToolTip(self.currentText())
+        self.blockSignals(False)
+        self.update()
