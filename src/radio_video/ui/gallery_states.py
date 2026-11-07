@@ -9,6 +9,7 @@ from __future__ import annotations
 import tempfile
 from collections.abc import Callable
 from dataclasses import dataclass, replace
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from PySide6.QtCore import QPoint, QSettings, QSize
@@ -21,6 +22,7 @@ from radio_video.models.estimate import estimate_output_size
 from radio_video.models.hardware import NVENC, HardwareSupport
 from radio_video.models.media import MediaInfo
 from radio_video.models.presets import OUTPUT_FORMATS, OutputFormat, Quality
+from radio_video.services.history import HistoryRecord, HistoryResult
 from radio_video.services.preview import PreviewKind as ServiceKind
 from radio_video.services.preview import PreviewSample
 from radio_video.services.queue import QueueStatus
@@ -71,7 +73,9 @@ def demo_window(size: str = "l") -> MainWindow:
         hardware=HardwareSupport(NVENC, NVENC.encoders, "NVIDIA GeForce RTX 3060"),
         hardware_checked=True,
     )
-    window = MainWindow(engine, settings=settings)
+    history = Path(tempfile.gettempdir()) / "rv-gallery-history.json"
+    history.unlink(missing_ok=True)
+    window = MainWindow(engine, settings=settings, history_path=history)
     window.output_namer = _demo_names
     window.folder_writable = lambda _folder: True
     window.resize(SIZES[size])
@@ -251,6 +255,104 @@ def _queue_demo(window: MainWindow) -> None:
         page.select(page.view.rows[3].entry_id)
 
 
+def _history_demo(window: MainWindow) -> None:
+    """The design's example history, newest first; saved files exist, one was moved."""
+    folder = Path(tempfile.gettempdir()) / "rv-gallery-outputs"
+    folder.mkdir(exist_ok=True)
+    now = datetime.now().replace(second=0, microsecond=0)
+    yesterday = now - timedelta(days=1)
+    rows = (
+        (
+            now.replace(hour=14, minute=32),
+            "Interview – Lisbon Studio Session (Final Cut, 2026-03-14).mkv",
+            "Interview – Lisbon Studio Session (Final Cut, 2026-03-14) (1).mp4",
+            "mp4-h264",
+            "Balanced",
+            HistoryResult.SAVED,
+            22 * MB + 400 * 1024,
+            43.0,
+            "",
+        ),
+        (
+            now.replace(hour=11, minute=5),
+            "Podcast ep. 40 – raw.wav",
+            "Podcast ep. 40 – raw.mp3",
+            "mp3",
+            "Balanced",
+            HistoryResult.SAVED,
+            38 * MB + 700 * 1024,
+            12.0,
+            "",
+        ),
+        (
+            yesterday.replace(hour=18, minute=20),
+            "B-roll_harbour_0412.mp4",
+            "",
+            "webm-vp9",
+            "Balanced",
+            HistoryResult.FAILED,
+            None,
+            62.0,
+            "No space left on device",
+        ),
+        (
+            yesterday.replace(hour=9, minute=47),
+            "clip.mov",
+            "clip.mp3",
+            "mp3",
+            "Balanced",
+            HistoryResult.SAVED,
+            121_754,
+            1.0,
+            "",
+        ),
+        (
+            datetime(2026, 10, 3, 16, 10),
+            "Old family tape (VHS transfer).avi",
+            "",
+            "mkv-h264",
+            "High",
+            HistoryResult.CANCELED,
+            None,
+            54.0,
+            "",
+        ),
+        (
+            datetime(2026, 10, 1, 10, 2),
+            "Rehearsal day 1.mov",
+            "Rehearsal day 1.mp4",
+            "mp4-h265",
+            "Small file",
+            HistoryResult.SAVED,
+            1288 * MB,
+            378.0,
+            "",
+        ),
+    )
+    for when, source, output, key, quality, result, size, took, error in reversed(rows):
+        output_path = folder / output if output else None
+        # Every saved file exists except the oldest, which shows as moved.
+        if output_path is not None and source != "Rehearsal day 1.mov":
+            output_path.touch()
+        window.history.add(
+            HistoryRecord(
+                when=when,
+                source=DEMO_FOLDER / source,
+                output=output_path,
+                format_key=key,
+                quality=quality,
+                custom=False,
+                result=result,
+                size=size,
+                took=took,
+                fraction=0.18 if result is HistoryResult.CANCELED else 1.0,
+                error=error,
+            )
+        )
+    _loaded(window)
+    window.machine.go(Page.HISTORY)
+
+
 def _page(page: Page) -> Callable[[MainWindow], None]:
     def apply(window: MainWindow) -> None:
         _loaded(window)
@@ -402,7 +504,8 @@ STATES = (
     GalleryState("custom", "Simple Mode after Advanced changes", _custom),
     GalleryState("queue", "Queue: running, every status", _queue_demo),
     GalleryState("queue-empty", "Queue: empty", _page(Page.QUEUE)),
-    GalleryState("history", "History (planned)", _page(Page.HISTORY)),
+    GalleryState("history", "History: saved, failed, canceled and moved", _history_demo),
+    GalleryState("history-empty", "History: empty", _page(Page.HISTORY)),
     GalleryState("settings", "Settings (planned)", _page(Page.SETTINGS)),
 )
 

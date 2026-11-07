@@ -496,9 +496,6 @@ ACTION_SOFTWARE = QT_TRANSLATE_NOOP("RadioVideo", "Convert with Software")
 ACTION_TRY_AGAIN = QT_TRANSLATE_NOOP("RadioVideo", "Try Again")
 
 # Planned screens
-PLANNED_HISTORY = QT_TRANSLATE_NOOP(
-    "RadioVideo", "History isn’t built yet. This shows how it will work."
-)
 PLANNED_SETTINGS = QT_TRANSLATE_NOOP(
     "RadioVideo",
     "Only Performance works so far. The other settings show how they will work.",
@@ -815,7 +812,7 @@ QUEUE_COUNTS = QT_TRANSLATE_NOOP(
     "{canceled} canceled",
 )
 
-# History (planned)
+# History
 HISTORY_TITLE = QT_TRANSLATE_NOOP("RadioVideo", "History")
 HISTORY_TEXT = QT_TRANSLATE_NOOP(
     "RadioVideo", "Your past conversions, with the settings used. Stored only on this computer."
@@ -837,6 +834,18 @@ HISTORY_DETAILS = QT_TRANSLATE_NOOP("RadioVideo", "Details")
 HISTORY_NO_FILE = QT_TRANSLATE_NOOP("RadioVideo", "No file saved")
 HISTORY_GONE = QT_TRANSLATE_NOOP("RadioVideo", "The output file was moved or deleted")
 HISTORY_EMPTY = QT_TRANSLATE_NOOP("RadioVideo", "Conversions you finish will appear here.")
+HISTORY_TODAY = QT_TRANSLATE_NOOP("RadioVideo", "Today, {time}")
+HISTORY_YESTERDAY = QT_TRANSLATE_NOOP("RadioVideo", "Yesterday, {time}")
+HISTORY_DATE = QT_TRANSLATE_NOOP("RadioVideo", "{date}, {time}")
+HISTORY_CANCELED_AT = QT_TRANSLATE_NOOP("RadioVideo", "No file saved · canceled at {percent}%")
+HISTORY_CLEAR_TITLE = QT_TRANSLATE_NOOP("RadioVideo", "Clear the history?")
+HISTORY_CLEAR_TEXT = QT_TRANSLATE_NOOP(
+    "RadioVideo",
+    "This removes the list of past conversions from this computer. The converted files "
+    "themselves are kept.",
+)
+HISTORY_CLEAR_CONFIRM = QT_TRANSLATE_NOOP("RadioVideo", "Clear History")
+HISTORY_DETAILS_TITLE = QT_TRANSLATE_NOOP("RadioVideo", "{name} wasn’t converted")
 
 # Settings (planned)
 SETTINGS_TITLE = QT_TRANSLATE_NOOP("RadioVideo", "Settings")
