@@ -131,6 +131,8 @@ control over encoding parameters, tracks and filters.
   - The window always says it shows the converted output, never the original: a "Converted
     preview" badge stays on the picture. Audio previews show the track as it sounds in the
     output.
+  - Files with several audio tracks or with subtitles get an audio track menu and a subtitles
+    menu (off by default); text subtitles are drawn over the picture.
   - Playback-only controls (play/pause, seek, mute, volume) with Space/K, Left/Right, M and Esc;
     Ctrl+Enter converts the full file with the same settings.
   - A side panel shows the part previewed, the preview size, the estimated full size (measured
