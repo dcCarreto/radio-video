@@ -255,6 +255,14 @@ A cumulative history of changes merged into `dev`, newest first.
 
 ### 2026-11-07
 
+- **#45 feat: make Advanced Mode work**: every setting on the Video, Audio, Tracks and Output
+  and filters tabs now changes the conversion and the previews: stream copy, software or
+  graphics card encoder, constant quality or target bitrate, preset, resolution, aspect ratio,
+  frame rate, pixel format, audio codec or copy, bitrate, sample rate, channels, per-track
+  choice, MP4/MKV switch, deinterlacing, fast start, metadata and loudness normalization. Only
+  options that fit the format and the file are offered. Simple Mode shows when Advanced choices
+  are in effect and can reset them; MP4 files now start playing on the web before they finish
+  downloading.
 - **#43 feat: play the opened file as it is, without converting**: a Play button next to Open
   (Ctrl+Shift+Space) opens the loaded file in the built-in player straight away, showing its size
   and every track, with nothing converted or written. It stays available during a conversion,
