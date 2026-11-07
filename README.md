@@ -295,6 +295,10 @@ A cumulative history of changes merged into `dev`, newest first.
 
 ### 2026-11-07
 
+- **#59 feat: update automatically from GitHub releases**: installed copies check for a new
+  version at startup, download the installer in the background, verify its SHA-256 and offer
+  Restart and Update (or install when the app closes). Settings → Updates turns this off and
+  has Check Now; Help → Check for Updates… checks at any time.
 - **#57 feat: make every setting work**: Settings now chooses the FFmpeg to use (checked before
   it is accepted), where converted files are saved, the format and quality new files start
   with, the folder for previews and the theme. Changes are saved as they are made.
