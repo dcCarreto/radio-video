@@ -255,6 +255,9 @@ A cumulative history of changes merged into `dev`, newest first.
 
 ### 2026-11-07
 
+- **#47 fix: retry the FFmpeg download when the daily build is being replaced**: the installer
+  build reads the FFmpeg release again and retries when the daily rebuild briefly removes the
+  file it was about to download, instead of failing.
 - **#45 feat: make Advanced Mode work**: every setting on the Video, Audio, Tracks and Output
   and filters tabs now changes the conversion and the previews: stream copy, software or
   graphics card encoder, constant quality or target bitrate, preset, resolution, aspect ratio,
