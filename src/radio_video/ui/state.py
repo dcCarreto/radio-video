@@ -13,6 +13,7 @@ from dataclasses import dataclass, field, replace
 from enum import Enum
 from pathlib import Path
 
+from radio_video.models.advanced import AdvancedChoices
 from radio_video.models.presets import Quality
 
 
@@ -58,6 +59,8 @@ class PreviewPhase(Enum):
 class PreviewKind(Enum):
     SAMPLE = "sample"
     FULL = "full"
+    # The opened file played as it is: nothing is converted, so it is ready at once.
+    ORIGINAL = "original"
 
 
 class Dialog(Enum):
@@ -85,11 +88,12 @@ STEP_OPEN, STEP_CHECK, STEP_CHOOSE, STEP_PREVIEW, STEP_CONVERT, STEPS_DONE = ran
 
 @dataclass(frozen=True)
 class SettingsKey:
-    """What a measured size is valid for: the same file, format and quality."""
+    """What a measured size is valid for: the same file, format, quality and choices."""
 
     source: Path | None
     format_key: str
     quality: Quality | None
+    advanced: AdvancedChoices = field(default_factory=AdvancedChoices)
 
 
 @dataclass(frozen=True)
@@ -119,6 +123,8 @@ class UiState:
     lossless: bool = False
     mode: Mode = Mode.SIMPLE
     advanced_tab: str = "video"
+    # Advanced choices; they stay in effect in Simple Mode until reset.
+    advanced: AdvancedChoices = field(default_factory=AdvancedChoices)
     job: Job = Job.IDLE
     progress: Progress = Progress()
     output: Path | None = None
@@ -141,7 +147,8 @@ class UiState:
 
     @property
     def settings_key(self) -> SettingsKey:
-        return SettingsKey(self.source, self.format_key, None if self.lossless else self.quality)
+        quality = None if self.lossless else self.quality
+        return SettingsKey(self.source, self.format_key, quality, self.advanced)
 
     @property
     def measured_size(self) -> int | None:
@@ -245,6 +252,8 @@ class StateMachine:
             dialog=None,
             preview=None,
             measured={},
+            # Track choices refer to the old file's streams.
+            advanced=AdvancedChoices(),
             format_key=format_key or self._state.format_key,
             lossless=self._state.lossless if lossless is None else lossless,
         )
@@ -272,14 +281,37 @@ class StateMachine:
     def set_format(self, key: str, *, lossless: bool) -> bool:
         if self._state.locked:
             return False
-        job = Job.IDLE if self._state.job in (Job.SUCCESS, Job.CANCELED) else self._state.job
-        return self._set(format_key=key, lossless=lossless, job=job)
+        if key == self._state.format_key:
+            return False
+        return self._set(
+            format_key=key,
+            lossless=lossless,
+            job=self._idle_job(),
+            advanced=self._state.advanced.for_format(),
+        )
 
     def set_quality(self, quality: Quality) -> bool:
         if self._state.locked:
             return False
-        job = Job.IDLE if self._state.job in (Job.SUCCESS, Job.CANCELED) else self._state.job
-        return self._set(quality=quality, job=job)
+        return self._set(
+            quality=quality, job=self._idle_job(), advanced=self._state.advanced.for_quality()
+        )
+
+    def set_advanced(self, choices: AdvancedChoices) -> bool:
+        if self._state.locked or choices == self._state.advanced:
+            return False
+        return self._set(advanced=choices, job=self._idle_job())
+
+    def reset_advanced(self) -> bool:
+        """Back to the format's own settings, at Balanced quality."""
+        if self._state.locked:
+            return False
+        return self._set(advanced=AdvancedChoices(), quality=Quality.BALANCED, job=self._idle_job())
+
+    def _idle_job(self) -> Job:
+        """A finished result is cleared once a setting changes."""
+        job = self._state.job
+        return Job.IDLE if job in (Job.SUCCESS, Job.CANCELED) else job
 
     # Conversion
     def conversion_requested(self) -> bool:
@@ -328,7 +360,13 @@ class StateMachine:
 
     # Previews
     def preview_requested(self, kind: PreviewKind) -> bool:
-        if self._state.screen is not Screen.MAIN or self._state.locked:
+        if self._state.screen is not Screen.MAIN:
+            return False
+        if kind is PreviewKind.ORIGINAL:
+            # Playing the file only reads it, so it stays available while converting.
+            preview = PreviewState(kind, PreviewPhase.READY, Progress(1.0))
+            return self._set(dialog=Dialog.PREVIEW, preview=preview)
+        if self._state.locked:
             return False
         preview = PreviewState(kind, PreviewPhase.CREATING, settings=self._state.settings_key)
         return self._set(dialog=Dialog.PREVIEW, preview=preview)
@@ -366,7 +404,11 @@ class StateMachine:
     def preview_outdated(self) -> bool:
         """True when the settings changed after the preview was made."""
         preview = self._state.preview
-        return preview is not None and preview.settings != self._state.settings_key
+        return (
+            preview is not None
+            and preview.kind is not PreviewKind.ORIGINAL
+            and preview.settings != self._state.settings_key
+        )
 
     def preview_closed(self) -> bool:
         if self._state.dialog is not Dialog.PREVIEW:

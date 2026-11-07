@@ -48,6 +48,8 @@ def make_drop_zone(
         refusal_text=lambda refusal: tr(REFUSALS[refusal]),
         is_busy=is_busy,
         show_open_button=show_open_button,
+        queue_title=lambda count: tr(s.DROP_OVER_QUEUE_TITLE, count),
+        queue_text=tr(s.DROP_OVER_QUEUE_TEXT),
     )
 
 

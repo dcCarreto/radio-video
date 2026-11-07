@@ -60,12 +60,14 @@ class DropRefusal(Enum):
 
 
 def check_drop(paths: list[Path], busy: bool) -> DropRefusal | None:
-    if busy:
-        return DropRefusal.BUSY
-    if len(paths) != 1:
+    """Why a drop is refused, or None. One file opens; several files go to the queue,
+    which also works while a conversion runs. Folders are never accepted."""
+    if not paths:
         return DropRefusal.SEVERAL_FILES
-    if paths[0].is_dir():
+    if any(path.is_dir() for path in paths):
         return DropRefusal.FOLDER
+    if len(paths) == 1 and busy:
+        return DropRefusal.BUSY
     return None
 
 
@@ -93,6 +95,8 @@ class DropZone(QFrame):
     """``refusal_text`` maps refusals to the reason shown; ``is_busy`` reports a conversion."""
 
     file_dropped = Signal(Path)
+    # Several files, for the queue.
+    files_dropped = Signal(list)
     open_requested = Signal()
     state_changed = Signal(DropState)
 
@@ -109,10 +113,15 @@ class DropZone(QFrame):
         refusal_text: Callable[[DropRefusal], str],
         is_busy: Callable[[], bool] = lambda: False,
         show_open_button: bool = True,
+        queue_title: Callable[[int], str] | None = None,
+        queue_text: str = "",
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self._titles = titles
+        self._over_text = over_text
+        self._queue_title = queue_title
+        self._queue_text = queue_text
         self._refusal_text = refusal_text
         self._is_busy = is_busy
         self._state = DropState.IDLE
@@ -172,17 +181,21 @@ class DropZone(QFrame):
     def state(self) -> DropState:
         return self._state
 
-    def set_state(self, state: DropState, reason: str = "") -> None:
+    def set_state(self, state: DropState, reason: str = "", count: int = 1) -> None:
+        """``count`` above one means several files dragged over, which go to the queue."""
         self._state = state
         self.tile.state = state
-        self.title.setText(self._titles[state])
+        title = self._titles[state]
+        several = state is DropState.OVER and count > 1 and self._queue_title is not None
+        if several and self._queue_title is not None:
+            title = self._queue_title(count)
+        self.title.setText(title)
+        self.over_text.setText(self._queue_text if several else self._over_text)
         if state is DropState.BLOCKED:
             self.blocked_text.setText(reason)
         self.details.setCurrentIndex(list(DropState).index(state))
         fit_stack_height(self.details)
-        self.setAccessibleDescription(
-            f"{self._titles[state]}. {reason}" if reason else self._titles[state]
-        )
+        self.setAccessibleDescription(f"{title}. {reason}" if reason else title)
         self.tile.update()
         self.update()
         self.state_changed.emit(state)
@@ -196,9 +209,10 @@ class DropZone(QFrame):
             return
         # Accept the enter even when refusing, so the reason shows and dragLeave arrives.
         event.accept()
-        refusal = check_drop(dropped_paths(event), self._is_busy())
+        paths = dropped_paths(event)
+        refusal = check_drop(paths, self._is_busy())
         if refusal is None:
-            self.set_state(DropState.OVER)
+            self.set_state(DropState.OVER, count=len(paths))
         else:
             self.set_state(DropState.BLOCKED, self._refusal_text(refusal))
 
@@ -217,7 +231,10 @@ class DropZone(QFrame):
         self.set_state(DropState.IDLE)
         if refusal is None:
             event.acceptProposedAction()
-            self.file_dropped.emit(paths[0])
+            if len(paths) > 1:
+                self.files_dropped.emit(paths)
+            else:
+                self.file_dropped.emit(paths[0])
         else:
             event.ignore()
 

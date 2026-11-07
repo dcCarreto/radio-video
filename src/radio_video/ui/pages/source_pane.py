@@ -23,6 +23,7 @@ from radio_video.ui.widgets.streams_table import StreamsTable
 
 class SourcePane(QWidget):
     open_requested = Signal()
+    play_requested = Signal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -39,12 +40,21 @@ class SourcePane(QWidget):
         )
         self.open_button.setToolTip(tr(s.OPEN_ANOTHER_TOOLTIP))
         self.open_button.clicked.connect(self.open_requested)
+        # Plays the file as it is; nothing is converted.
+        self.play_button = Button(tr(s.PLAY_SOURCE), icon="Play")
+        self.play_button.setToolTip(tr(s.PLAY_SOURCE_TOOLTIP))
+        self.play_button.clicked.connect(self.play_requested)
         self.paused = label(tr(s.OPEN_PAUSED), TextStyle.CAPTION, "secondary")
         self.paused.setAlignment(Qt.AlignmentFlag.AlignRight)
         self.paused.hide()
         actions = QVBoxLayout()
         actions.setSpacing(4)
-        actions.addWidget(self.open_button, 0, Qt.AlignmentFlag.AlignRight)
+        buttons = QHBoxLayout()
+        buttons.setSpacing(8)
+        buttons.addStretch()
+        buttons.addWidget(self.play_button)
+        buttons.addWidget(self.open_button)
+        actions.addLayout(buttons)
         actions.addWidget(self.paused, 0, Qt.AlignmentFlag.AlignRight)
         actions.addStretch()
 

@@ -79,7 +79,12 @@ DROP_OVER_TEXT = QT_TRANSLATE_NOOP(
 DROP_BLOCKED_TITLE = QT_TRANSLATE_NOOP("RadioVideo", "Can’t open a file right now")
 DROP_BLOCKED_SEVERAL = QT_TRANSLATE_NOOP(
     "RadioVideo",
-    "Drop one file at a time. Converting many files at once will come with the queue.",
+    "Drop files, not folders. Several files go to the queue.",
+)
+DROP_OVER_QUEUE_TITLE = QT_TRANSLATE_NOOP("RadioVideo", "Release to add %n file(s) to the queue")
+DROP_OVER_QUEUE_TEXT = QT_TRANSLATE_NOOP(
+    "RadioVideo",
+    "Each file is read and added with the format and quality chosen on the Convert tab.",
 )
 DROP_BLOCKED_CONVERTING = QT_TRANSLATE_NOOP(
     "RadioVideo",
@@ -159,6 +164,10 @@ PLAYER_SEEK = QT_TRANSLATE_NOOP("RadioVideo", "Seek (Left/Right arrow)")
 PLAYER_MUTE = QT_TRANSLATE_NOOP("RadioVideo", "Mute (M)")
 PLAYER_UNMUTE = QT_TRANSLATE_NOOP("RadioVideo", "Unmute (M)")
 PLAYER_VOLUME = QT_TRANSLATE_NOOP("RadioVideo", "Volume")
+PLAYER_AUDIO_TRACK = QT_TRANSLATE_NOOP("RadioVideo", "Audio track")
+PLAYER_SUBTITLES = QT_TRANSLATE_NOOP("RadioVideo", "Subtitles")
+PLAYER_SUBTITLES_OFF = QT_TRANSLATE_NOOP("RadioVideo", "Off")
+PLAYER_TRACK = QT_TRANSLATE_NOOP("RadioVideo", "Track {number}")
 
 # Start screen
 START_HEADLINE = QT_TRANSLATE_NOOP(
@@ -312,10 +321,13 @@ CONTENT_TRACK_LANGUAGE = QT_TRANSLATE_NOOP("RadioVideo", "Track {number} ({langu
 CONTENT_DOWNMIX = QT_TRANSLATE_NOOP("RadioVideo", "{track}, {layout} mixed down to stereo")
 CONTENT_LAYOUT_KEPT = QT_TRANSLATE_NOOP("RadioVideo", "{track}, {layout} kept")
 CONTENT_LAYOUT = QT_TRANSLATE_NOOP("RadioVideo", "{track}, {layout}")
+CONTENT_DOWNMIX_TO = QT_TRANSLATE_NOOP("RadioVideo", "{track}, {layout} mixed to {target}")
+CONTENT_COPIED = QT_TRANSLATE_NOOP("RadioVideo", "{codec}, copied as it is")
 LEFT_OUT_VIDEO = QT_TRANSLATE_NOOP("RadioVideo", "Video")
 LEFT_OUT_AUDIO = QT_TRANSLATE_NOOP("RadioVideo", "%n other audio track(s)")
 LEFT_OUT_SUBTITLES = QT_TRANSLATE_NOOP("RadioVideo", "subtitles")
 LEFT_OUT_IMAGE_SUBTITLES = QT_TRANSLATE_NOOP("RadioVideo", "image subtitles")
+LEFT_OUT_SUBTITLE_TRACKS = QT_TRANSLATE_NOOP("RadioVideo", "%n subtitle track(s)")
 LEFT_OUT_COVER = QT_TRANSLATE_NOOP("RadioVideo", "cover art")
 LIST_SEPARATOR = QT_TRANSLATE_NOOP("RadioVideo", ", ")
 SUBTITLE_MP4_TEXT = QT_TRANSLATE_NOOP("RadioVideo", "MP4 text")
@@ -488,18 +500,9 @@ ACTION_SOFTWARE = QT_TRANSLATE_NOOP("RadioVideo", "Convert with Software")
 ACTION_TRY_AGAIN = QT_TRANSLATE_NOOP("RadioVideo", "Try Again")
 
 # Planned screens
-PLANNED_QUEUE = QT_TRANSLATE_NOOP(
-    "RadioVideo", "The queue isn’t built yet. This shows how it will work."
-)
-PLANNED_HISTORY = QT_TRANSLATE_NOOP(
-    "RadioVideo", "History isn’t built yet. This shows how it will work."
-)
 PLANNED_SETTINGS = QT_TRANSLATE_NOOP(
     "RadioVideo",
     "Only Performance works so far. The other settings show how they will work.",
-)
-PLANNED_ADVANCED = QT_TRANSLATE_NOOP(
-    "RadioVideo", "Advanced Mode isn’t built yet. This shows how it will work."
 )
 
 # Preview window
@@ -547,8 +550,39 @@ PREVIEW_AGAIN = QT_TRANSLATE_NOOP("RadioVideo", "Create Preview Again")
 PREVIEW_CONVERT_FULL = QT_TRANSLATE_NOOP("RadioVideo", "Convert Full File")
 PREVIEW_OUTDATED = QT_TRANSLATE_NOOP("RadioVideo", "Your settings changed after this preview.")
 PREVIEW_UPDATE = QT_TRANSLATE_NOOP("RadioVideo", "Update Preview")
+PREVIEW_PLAY_ORIGINAL = QT_TRANSLATE_NOOP("RadioVideo", "Play Original")
+PREVIEW_PLAY_ORIGINAL_TOOLTIP = QT_TRANSLATE_NOOP(
+    "RadioVideo", "Play the file you opened as it is, to compare"
+)
 
-# Advanced Mode (planned)
+# Original player: the opened file played as it is, nothing converted
+ORIGINAL_WINDOW_TITLE = QT_TRANSLATE_NOOP("RadioVideo", "Original: {name}")
+ORIGINAL_BADGE = QT_TRANSLATE_NOOP("RadioVideo", "Original")
+ORIGINAL_NOTE = QT_TRANSLATE_NOOP(
+    "RadioVideo", "This is the file you opened, played as it is. Nothing was converted."
+)
+ORIGINAL_SIDE_TITLE = QT_TRANSLATE_NOOP("RadioVideo", "This file")
+ORIGINAL_SIZE = QT_TRANSLATE_NOOP("RadioVideo", "Size")
+ORIGINAL_CONTENTS = QT_TRANSLATE_NOOP("RadioVideo", "Inside")
+ORIGINAL_AUDIO_TITLE = QT_TRANSLATE_NOOP("RadioVideo", "Original audio")
+ORIGINAL_FAILED_TITLE = QT_TRANSLATE_NOOP("RadioVideo", "This file can’t be played here")
+ORIGINAL_FAILED_TEXT = QT_TRANSLATE_NOOP(
+    "RadioVideo",
+    "The built-in player doesn’t support something in this file. It can still be converted.",
+)
+ORIGINAL_FAILED_DO = QT_TRANSLATE_NOOP(
+    "RadioVideo", "Create a converted preview to watch it with your settings."
+)
+ORIGINAL_PREVIEW_CONVERTED = QT_TRANSLATE_NOOP("RadioVideo", "Preview Converted")
+ORIGINAL_PREVIEW_CONVERTED_TOOLTIP = QT_TRANSLATE_NOOP(
+    "RadioVideo", "Convert a 15-second sample with your settings and play it"
+)
+PLAY_SOURCE = QT_TRANSLATE_NOOP("RadioVideo", "Play")
+PLAY_SOURCE_TOOLTIP = QT_TRANSLATE_NOOP(
+    "RadioVideo", "Play the file as it is, without converting anything (Ctrl+Shift+Space)"
+)
+
+# Advanced Mode
 ADV_TAB_VIDEO = QT_TRANSLATE_NOOP("RadioVideo", "Video")
 ADV_TAB_AUDIO = QT_TRANSLATE_NOOP("RadioVideo", "Audio")
 ADV_TAB_TRACKS = QT_TRANSLATE_NOOP("RadioVideo", "Tracks")
@@ -658,8 +692,58 @@ ADV_LOUDNESS_HELP = QT_TRANSLATE_NOOP(
 )
 ADV_SUMMARY = QT_TRANSLATE_NOOP("RadioVideo", "Output summary")
 ADV_SIZE_AFTER_PREVIEW = QT_TRANSLATE_NOOP("RadioVideo", "≈ size after preview")
+ADV_STREAM_COPY_UNAVAILABLE = QT_TRANSLATE_NOOP(
+    "RadioVideo",
+    "{container} can’t hold {codec} video as it is. Choose MKV on the Output tab to copy it.",
+)
+ADV_NO_VIDEO = QT_TRANSLATE_NOOP(
+    "RadioVideo", "{format} has no video. Pick a video format to change video settings."
+)
+ADV_ENCODER_SOFTWARE = QT_TRANSLATE_NOOP("RadioVideo", "{codec} · Software ({encoder})")
+ADV_ENCODER_HARDWARE = QT_TRANSLATE_NOOP("RadioVideo", "{codec} · Graphics card ({technology})")
+ADV_ENCODER_DETECTED = QT_TRANSLATE_NOOP("RadioVideo", "{technology} detected")
+ADV_ENCODER_SOFTWARE_ONLY = QT_TRANSLATE_NOOP(
+    "RadioVideo", "No graphics card encoder for {codec} was found on this computer."
+)
+ADV_PRESET_HARDWARE = QT_TRANSLATE_NOOP(
+    "RadioVideo", "The graphics card uses its own balanced preset."
+)
+ADV_VIDEO_BITRATE = QT_TRANSLATE_NOOP("RadioVideo", "Video bitrate")
+ADV_VIDEO_BITRATE_HELP = QT_TRANSLATE_NOOP(
+    "RadioVideo", "Bits per second for the picture. 8 Mb/s suits 1080p; 5 Mb/s suits 720p."
+)
+ADV_SET_BY_QUALITY = QT_TRANSLATE_NOOP("RadioVideo", "Set by quality ({value})")
+ADV_VARIABLE_QUALITY = QT_TRANSLATE_NOOP("RadioVideo", "variable, quality {value}")
+ADV_PIXEL_8BIT = QT_TRANSLATE_NOOP("RadioVideo", "8-bit, most compatible")
+ADV_PIXEL_422 = QT_TRANSLATE_NOOP("RadioVideo", "8-bit, more colour detail, less compatible")
+ADV_PIXEL_444 = QT_TRANSLATE_NOOP("RadioVideo", "8-bit, full colour detail, least compatible")
+ADV_PIXEL_10BIT = QT_TRANSLATE_NOOP("RadioVideo", "10-bit, smoother gradients, newer devices")
+ADV_AUDIO_COPY = QT_TRANSLATE_NOOP("RadioVideo", "Keep original audio (copy)")
+ADV_AUDIO_COPY_HELP = QT_TRANSLATE_NOOP(
+    "RadioVideo", "Copies the audio exactly as it is. Bitrate and channel settings don’t apply."
+)
+ADV_CODEC_HELP_VIDEO = QT_TRANSLATE_NOOP(
+    "RadioVideo", "Only codecs that {container} can hold are listed."
+)
+ADV_CODEC_HELP_AUDIO = QT_TRANSLATE_NOOP(
+    "RadioVideo", "The codec is the format itself. Pick another format to change it."
+)
+ADV_NO_AUDIO_KEPT = QT_TRANSLATE_NOOP(
+    "RadioVideo", "No audio track is kept. Choose tracks on the Tracks tab."
+)
+ADV_TRACK_NOT_SUPPORTED = QT_TRANSLATE_NOOP("RadioVideo", "{format} can’t store this track")
+ADV_TRACK_ONE_OF = QT_TRANSLATE_NOOP(
+    "RadioVideo", "Only one {kind} track fits; checking another replaces it."
+)
+ADV_DEINTERLACE_OFF = QT_TRANSLATE_NOOP("RadioVideo", "Off")
+ADV_DEINTERLACE_ALWAYS = QT_TRANSLATE_NOOP("RadioVideo", "Always")
+ADV_LOUDNESS_COPY = QT_TRANSLATE_NOOP(
+    "RadioVideo", "Not available while the audio is copied as it is."
+)
+CUSTOM_QUALITY = QT_TRANSLATE_NOOP("RadioVideo", "Quality: Custom (set in Advanced)")
+CUSTOM_RESET = QT_TRANSLATE_NOOP("RadioVideo", "Reset to Balanced")
 
-# Queue (planned)
+# Queue
 QUEUE_TITLE = QT_TRANSLATE_NOOP("RadioVideo", "Queue")
 QUEUE_TEXT = QT_TRANSLATE_NOOP(
     "RadioVideo",
@@ -672,7 +756,46 @@ QUEUE_UP = QT_TRANSLATE_NOOP("RadioVideo", "Move Up")
 QUEUE_DOWN = QT_TRANSLATE_NOOP("RadioVideo", "Move Down")
 QUEUE_RETRY = QT_TRANSLATE_NOOP("RadioVideo", "Retry")
 QUEUE_REMOVE = QT_TRANSLATE_NOOP("RadioVideo", "Remove")
-QUEUE_DRAG = QT_TRANSLATE_NOOP("RadioVideo", "Drag rows to reorder")
+QUEUE_START = QT_TRANSLATE_NOOP("RadioVideo", "Start Queue")
+QUEUE_CLEAR = QT_TRANSLATE_NOOP("RadioVideo", "Clear Finished")
+QUEUE_SHORTCUTS = QT_TRANSLATE_NOOP("RadioVideo", "Delete removes · Alt+Up/Down moves")
+QUEUE_EMPTY_TITLE = QT_TRANSLATE_NOOP("RadioVideo", "The queue is empty")
+QUEUE_EMPTY_TEXT = QT_TRANSLATE_NOOP(
+    "RadioVideo",
+    "Add files here with Add Files…, drop several files on the window, or set up a file on "
+    "the Convert tab and choose Add to Queue. Each file is converted with its own settings.",
+)
+QUEUE_START_BLOCKED = QT_TRANSLATE_NOOP(
+    "RadioVideo", "The queue can start when the conversion on the Convert tab finishes."
+)
+QUEUE_NOTHING_WAITING = QT_TRANSLATE_NOOP("RadioVideo", "No file is waiting.")
+QUEUE_SAVED = QT_TRANSLATE_NOOP("RadioVideo", "Saved · took {time}")
+QUEUE_CANCELED_AT = QT_TRANSLATE_NOOP("RadioVideo", "Canceled at {percent}%")
+QUEUE_CANT_READ = QT_TRANSLATE_NOOP("RadioVideo", "Can’t read this file")
+QUEUE_CUSTOM = QT_TRANSLATE_NOOP("RadioVideo", "{what} · Custom")
+QUEUE_DONE_PART = QT_TRANSLATE_NOOP("RadioVideo", "{count} done")
+QUEUE_CONVERTING_PART = QT_TRANSLATE_NOOP("RadioVideo", "{count} converting")
+QUEUE_WAITING_PART = QT_TRANSLATE_NOOP("RadioVideo", "{count} waiting")
+QUEUE_FAILED_PART = QT_TRANSLATE_NOOP("RadioVideo", "{count} failed")
+QUEUE_CANCELED_PART = QT_TRANSLATE_NOOP("RadioVideo", "{count} canceled")
+QUEUE_FINISHED_STATUS = QT_TRANSLATE_NOOP("RadioVideo", "Queue finished")
+QUEUE_RUNNING_STATUS = QT_TRANSLATE_NOOP(
+    "RadioVideo", "Converting file {current} of {total}… {percent}%"
+)
+QUEUE_TAB_COUNT = QT_TRANSLATE_NOOP("RadioVideo", "Queue · {count}")
+ADD_TO_QUEUE = QT_TRANSLATE_NOOP("RadioVideo", "Add to Queue")
+ADD_TO_QUEUE_TOOLTIP = QT_TRANSLATE_NOOP(
+    "RadioVideo",
+    "Convert this file later with these settings, after the files already in the queue "
+    "(Ctrl+Shift+Enter)",
+)
+QUEUE_ADDED = QT_TRANSLATE_NOOP("RadioVideo", "Added to the queue: {name}")
+QUEUE_ADD_DIALOG = QT_TRANSLATE_NOOP("RadioVideo", "Add Files to the Queue")
+CONVERT_BLOCKED_QUEUE = QT_TRANSLATE_NOOP(
+    "RadioVideo", "The queue is converting. Stop it on the Queue tab, or add this file to it."
+)
+NOTIFY_QUEUE_TITLE = QT_TRANSLATE_NOOP("RadioVideo", "Queue finished")
+QUIT_QUEUE_TITLE = QT_TRANSLATE_NOOP("RadioVideo", "Stop the queue and quit?")
 QUEUE_COLUMNS = (
     QT_TRANSLATE_NOOP("RadioVideo", "#"),
     QT_TRANSLATE_NOOP("RadioVideo", "File"),
@@ -693,7 +816,7 @@ QUEUE_COUNTS = QT_TRANSLATE_NOOP(
     "{canceled} canceled",
 )
 
-# History (planned)
+# History
 HISTORY_TITLE = QT_TRANSLATE_NOOP("RadioVideo", "History")
 HISTORY_TEXT = QT_TRANSLATE_NOOP(
     "RadioVideo", "Your past conversions, with the settings used. Stored only on this computer."
@@ -715,6 +838,18 @@ HISTORY_DETAILS = QT_TRANSLATE_NOOP("RadioVideo", "Details")
 HISTORY_NO_FILE = QT_TRANSLATE_NOOP("RadioVideo", "No file saved")
 HISTORY_GONE = QT_TRANSLATE_NOOP("RadioVideo", "The output file was moved or deleted")
 HISTORY_EMPTY = QT_TRANSLATE_NOOP("RadioVideo", "Conversions you finish will appear here.")
+HISTORY_TODAY = QT_TRANSLATE_NOOP("RadioVideo", "Today, {time}")
+HISTORY_YESTERDAY = QT_TRANSLATE_NOOP("RadioVideo", "Yesterday, {time}")
+HISTORY_DATE = QT_TRANSLATE_NOOP("RadioVideo", "{date}, {time}")
+HISTORY_CANCELED_AT = QT_TRANSLATE_NOOP("RadioVideo", "No file saved · canceled at {percent}%")
+HISTORY_CLEAR_TITLE = QT_TRANSLATE_NOOP("RadioVideo", "Clear the history?")
+HISTORY_CLEAR_TEXT = QT_TRANSLATE_NOOP(
+    "RadioVideo",
+    "This removes the list of past conversions from this computer. The converted files "
+    "themselves are kept.",
+)
+HISTORY_CLEAR_CONFIRM = QT_TRANSLATE_NOOP("RadioVideo", "Clear History")
+HISTORY_DETAILS_TITLE = QT_TRANSLATE_NOOP("RadioVideo", "{name} wasn’t converted")
 
 # Settings (planned)
 SETTINGS_TITLE = QT_TRANSLATE_NOOP("RadioVideo", "Settings")

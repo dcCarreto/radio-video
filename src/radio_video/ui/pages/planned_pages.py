@@ -1,19 +1,16 @@
-"""Queue, History and Settings, planned: they show how the features will work, with example
+"""Settings, planned: they show how the features will work, with example
 rows, under a banner that says they aren't built yet. Nothing on them acts."""
 
 from __future__ import annotations
 
 import tempfile
-from dataclasses import dataclass
 from pathlib import Path
 
 from PySide6.QtCore import QRectF, Qt, Signal
 from PySide6.QtGui import QPaintEvent
 from PySide6.QtWidgets import (
-    QFrame,
     QGridLayout,
     QHBoxLayout,
-    QScrollArea,
     QVBoxLayout,
     QWidget,
 )
@@ -23,16 +20,19 @@ from radio_video.ui import strings as s
 from radio_video.ui import theme
 from radio_video.ui import viewmodel as vm
 from radio_video.ui.icons import IconName
+from radio_video.ui.pages.page_parts import (
+    Page,
+    elided,
+    page_scroll,
+)
 from radio_video.ui.strings import tr
 from radio_video.ui.theme.fonts import TextStyle
 from radio_video.ui.widgets.badge import Badge, BadgeTone
-from radio_video.ui.widgets.button import Button, ButtonKind, ButtonSize
-from radio_video.ui.widgets.checks import CheckBox, RadioButton, Switch
-from radio_video.ui.widgets.frames import ComboFace, FieldBox, PlannedBanner, Rule
-from radio_video.ui.widgets.grid_table import Column, GridTable
-from radio_video.ui.widgets.labels import ElidedLabel, label
+from radio_video.ui.widgets.button import Button
+from radio_video.ui.widgets.checks import RadioButton, Switch
+from radio_video.ui.widgets.frames import ComboFace, FieldBox, PlannedBanner
+from radio_video.ui.widgets.labels import label
 from radio_video.ui.widgets.painting import antialiased, follow_theme
-from radio_video.ui.widgets.progress import ProgressBar
 from radio_video.ui.widgets.segmented import SegmentedControl, SegmentOption
 
 SETTINGS_MAX_WIDTH = 1000
@@ -40,401 +40,7 @@ SECTION_LABEL_WIDTH = 240
 ROWS_MAX_WIDTH = 620
 
 
-class _Page(QWidget):
-    def paintEvent(self, event: QPaintEvent) -> None:  # noqa: N802
-        painter = antialiased(self)
-        painter.fillRect(self.rect(), theme.palette().bg)
-
-
-class _Header(QFrame):
-    """Page title and description over a 2 px rule, with actions on the right."""
-
-    def __init__(self, title: str, text: str, actions: list[QWidget]) -> None:
-        super().__init__()
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(24, 20, 24, 16)
-        layout.setSpacing(16)
-        names = QVBoxLayout()
-        names.setSpacing(0)
-        names.addWidget(label(title, TextStyle.TITLE_LARGE))
-        names.addWidget(label(text, tone="secondary", wrap=True))
-        layout.addLayout(names, 1)
-        for action in actions:
-            layout.addWidget(action, 0, Qt.AlignmentFlag.AlignBottom)
-        follow_theme(self)
-
-    def paintEvent(self, event: QPaintEvent) -> None:  # noqa: N802
-        painter = antialiased(self)
-        painter.fillRect(QRectF(0, self.height() - 2, self.width(), 2), theme.palette().rule)
-
-
-def _scroll(content: QWidget) -> QScrollArea:
-    content.setProperty("transparent", True)
-    scroll = QScrollArea()
-    scroll.setWidgetResizable(True)
-    scroll.setFrameShape(QFrame.Shape.NoFrame)
-    scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-    scroll.setWidget(content)
-    return scroll
-
-
-def _elided(text: str, style: TextStyle = TextStyle.BODY, tone: str | None = None) -> ElidedLabel:
-    return ElidedLabel(text, style, mode=Qt.TextElideMode.ElideMiddle, tone=tone)
-
-
 # Queue
-
-STATUS_BADGES: dict[str, tuple[BadgeTone, IconName, object]] = {
-    "done": (BadgeTone.SUCCESS, "CircleCheck", s.STATUS_DONE),
-    "converting": (BadgeTone.ACCENT, "LoaderCircle", s.STATUS_CONVERTING_BADGE),
-    "waiting": (BadgeTone.NEUTRAL, "Clock", s.STATUS_WAITING),
-    "failed": (BadgeTone.DANGER, "CircleX", s.STATUS_FAILED),
-    "canceled": (BadgeTone.NEUTRAL, "Ban", s.STATUS_CANCELED),
-}
-
-
-@dataclass(frozen=True)
-class QueueRow:
-    file: str
-    target: str
-    status: str
-    progress: str
-    size: str
-
-
-EXAMPLE_QUEUE = (
-    QueueRow(
-        "Interview – Lisbon Studio Session (Final Cut, 2026-03-14).mkv",
-        "MP4 (H.264 + AAC) · Balanced",
-        "done",
-        "Saved · took 0:43",
-        "22.4 MB",
-    ),
-    QueueRow(
-        "Rehearsal day 2 – wide camera.mov",
-        "MP4 (H.265 + AAC) · Small file",
-        "converting",
-        "42% · 3.1× · 0:25 remaining",
-        "—",
-    ),
-    QueueRow("Podcast ep. 41 – raw.wav", "MP3 · Balanced", "waiting", "Waiting", "≈ 41.3 MB"),
-    QueueRow(
-        "B-roll_harbour_0412.mp4",
-        "WebM (VP9 + Opus) · Balanced",
-        "failed",
-        "Not enough disk space",
-        "—",
-    ),
-    QueueRow(
-        "Voice memo 2026-02-11 08.14.m4a", "Opus · Balanced", "waiting", "Waiting", "≈ 1.1 MB"
-    ),
-    QueueRow(
-        "Old family tape (VHS transfer).avi",
-        "MKV (H.264 + AAC) · High",
-        "canceled",
-        "Canceled at 18%",
-        "—",
-    ),
-)
-
-
-def _badge(status: str, text: object | None = None) -> Badge:
-    tone, icon, default = STATUS_BADGES[status]
-    return Badge(tr(text or default), tone, icon)
-
-
-class QueuePage(_Page):
-    def __init__(self, parent: QWidget | None = None) -> None:
-        super().__init__(parent)
-        pause = CheckBox(tr(s.QUEUE_PAUSE_AFTER))
-        stop = Button(tr(s.QUEUE_STOP), ButtonKind.DANGER, icon="Square")
-        toolbar = QHBoxLayout()
-        toolbar.setContentsMargins(20, 8, 20, 8)
-        toolbar.setSpacing(4)
-        buttons: list[tuple[object, IconName] | None] = [
-            (s.QUEUE_ADD, "Plus"),
-            None,
-            (s.QUEUE_UP, "ArrowUp"),
-            (s.QUEUE_DOWN, "ArrowDown"),
-            None,
-            (s.QUEUE_RETRY, "RotateCcw"),
-            (s.QUEUE_REMOVE, "Trash2"),
-        ]
-        for item in buttons:
-            if item is None:
-                toolbar.addWidget(Rule(hairline=True, vertical=True))
-                continue
-            toolbar.addWidget(Button(tr(item[0]), ButtonKind.SUBTLE, icon=item[1]))
-        toolbar.addStretch()
-        toolbar.addWidget(label(tr(s.QUEUE_DRAG), TextStyle.CAPTION, "secondary"))
-        self.toolbar = QWidget()
-        self.toolbar.setLayout(toolbar)
-
-        self.table_box = QVBoxLayout()
-        self.table_box.setContentsMargins(24, 4, 24, 16)
-        content = QWidget()
-        content_layout = QVBoxLayout(content)
-        content_layout.setContentsMargins(0, 0, 0, 0)
-        content_layout.addLayout(self.table_box)
-        content_layout.addStretch()
-
-        footer = QHBoxLayout()
-        footer.setContentsMargins(24, 12, 24, 12)
-        footer.setSpacing(16)
-        footer.addWidget(
-            label(tr(s.QUEUE_FILE_OF).format(current=2, total=6), TextStyle.BODY_STRONG)
-        )
-        overall = ProgressBar()
-        overall.set_fraction(0.24)
-        overall.setFixedWidth(240)
-        footer.addWidget(overall)
-        footer.addWidget(
-            label(
-                tr(s.QUEUE_COUNTS).format(done=1, converting=1, waiting=2, failed=1, canceled=1),
-                TextStyle.CAPTION,
-                "secondary",
-            ),
-            1,
-        )
-        footer_frame = _FooterBand()
-        footer_frame.setLayout(footer)
-
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
-        layout.addWidget(PlannedBanner(tr(s.PLANNED_QUEUE), tr(s.BADGE_PLANNED)))
-        layout.addWidget(_Header(tr(s.QUEUE_TITLE), tr(s.QUEUE_TEXT), [pause, stop]))
-        layout.addWidget(self.toolbar)
-        layout.addWidget(Rule(hairline=True))
-        layout.addWidget(_scroll(content), 1)
-        layout.addWidget(footer_frame)
-        self.table: GridTable | None = None
-        self.set_compact(False)
-
-    def set_compact(self, compact: bool) -> None:
-        if self.table is not None:
-            self.table_box.removeWidget(self.table)
-            self.table.deleteLater()
-        titles = [tr(t) for t in s.QUEUE_COLUMNS]
-        columns = [
-            Column(titles[0], 36),
-            Column(titles[1]),
-            Column(titles[2], 170 if compact else 240),
-            Column(titles[3], 120),
-            Column(titles[4], 180 if compact else 260),
-        ]
-        if not compact:
-            columns.append(Column(titles[5], 100))
-        table = GridTable(columns)
-        for number, row in enumerate(EXAMPLE_QUEUE, start=1):
-            if row.status == "converting":
-                bar = ProgressBar()
-                bar.set_fraction(0.42)
-                progress = QWidget()
-                progress_layout = QVBoxLayout(progress)
-                progress_layout.setContentsMargins(0, 0, 0, 0)
-                progress_layout.setSpacing(4)
-                progress_layout.addWidget(bar)
-                progress_layout.addWidget(label(row.progress, TextStyle.CAPTION, "secondary"))
-            elif row.status == "failed":
-                progress = QWidget()
-                progress_layout2 = QHBoxLayout(progress)
-                progress_layout2.setContentsMargins(0, 0, 0, 0)
-                progress_layout2.addWidget(ElidedLabel(row.progress, tone="danger"), 1)
-                progress_layout2.addWidget(
-                    Button(
-                        tr(s.QUEUE_RETRY),
-                        ButtonKind.SUBTLE,
-                        icon="RotateCcw",
-                        size=ButtonSize.SMALL,
-                    )
-                )
-            else:
-                progress = label(row.progress, tone="secondary")
-            cells: list[QWidget] = [
-                label(str(number), tone="secondary"),
-                _elided(row.file),
-                _elided(row.target),
-                _badge(row.status),
-                progress,
-            ]
-            if not compact:
-                cells.append(label(row.size))
-            table.add_row(cells, selected=number == 4)
-        self.table = table
-        self.table_box.addWidget(table)
-
-
-class _FooterBand(QFrame):
-    def __init__(self) -> None:
-        super().__init__()
-        follow_theme(self)
-
-    def paintEvent(self, event: QPaintEvent) -> None:  # noqa: N802
-        painter = antialiased(self)
-        p = theme.palette()
-        painter.fillRect(self.rect(), p.surface)
-        painter.fillRect(QRectF(0, 0, self.width(), 2), p.rule)
-
-
-# History
-
-
-@dataclass(frozen=True)
-class HistoryRow:
-    when: str
-    source: str
-    output: str
-    target: str
-    result: str
-    size: str
-    took: str
-
-
-EXAMPLE_HISTORY = (
-    HistoryRow(
-        "Today, 14:32",
-        "Interview – Lisbon Studio Session (Final Cut, 2026-03-14).mkv",
-        "Interview – Lisbon Studio Session (Final Cut, 2026-03-14) (1).mp4",
-        "MP4 (H.264 + AAC) · Balanced",
-        "saved",
-        "22.4 MB",
-        "0:43",
-    ),
-    HistoryRow(
-        "Today, 11:05",
-        "Podcast ep. 40 – raw.wav",
-        "Podcast ep. 40 – raw.mp3",
-        "MP3 · Balanced",
-        "saved",
-        "38.7 MB",
-        "0:12",
-    ),
-    HistoryRow(
-        "Yesterday, 18:20",
-        "B-roll_harbour_0412.mp4",
-        "",
-        "WebM (VP9 + Opus) · Balanced",
-        "failed",
-        "—",
-        "1:02",
-    ),
-    HistoryRow(
-        "Yesterday, 09:47", "clip.mov", "clip.mp3", "MP3 · Balanced", "saved", "118.9 KB", "0:01"
-    ),
-    HistoryRow(
-        "3 Oct 2026, 16:10",
-        "Old family tape (VHS transfer).avi",
-        "",
-        "MKV (H.264 + AAC) · High",
-        "canceled",
-        "—",
-        "0:54",
-    ),
-    HistoryRow(
-        "1 Oct 2026, 10:02",
-        "Rehearsal day 1.mov",
-        "Rehearsal day 1.mp4",
-        "MP4 (H.265 + AAC) · Small file",
-        "moved",
-        "1.2 GB",
-        "6:18",
-    ),
-)
-
-RESULT_BADGES: dict[str, tuple[str, object | None]] = {
-    "saved": ("done", s.HISTORY_SAVED),
-    "failed": ("failed", None),
-    "canceled": ("canceled", None),
-    "moved": ("", s.HISTORY_MOVED),
-}
-
-
-class HistoryPage(_Page):
-    def __init__(self, parent: QWidget | None = None) -> None:
-        super().__init__(parent)
-        clear = Button(tr(s.HISTORY_CLEAR), ButtonKind.SUBTLE, icon="Trash2")
-        self.table_box = QVBoxLayout()
-        self.table_box.setContentsMargins(24, 4, 24, 16)
-        content = QWidget()
-        content_layout = QVBoxLayout(content)
-        content_layout.setContentsMargins(0, 0, 0, 0)
-        content_layout.addLayout(self.table_box)
-        content_layout.addStretch()
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
-        layout.addWidget(PlannedBanner(tr(s.PLANNED_HISTORY), tr(s.BADGE_PLANNED)))
-        layout.addWidget(_Header(tr(s.HISTORY_TITLE), tr(s.HISTORY_TEXT), [clear]))
-        layout.addWidget(_scroll(content), 1)
-        self.table: GridTable | None = None
-        self.set_compact(False)
-
-    def _result(self, row: HistoryRow) -> Badge:
-        status, text = RESULT_BADGES[row.result]
-        if row.result == "moved":
-            return Badge(tr(s.HISTORY_MOVED), BadgeTone.WARNING, "TriangleAlert")
-        return _badge(status, text)
-
-    def _actions(self, row: HistoryRow) -> QWidget:
-        if row.result == "moved":
-            return label(tr(s.HISTORY_GONE), TextStyle.CAPTION, "secondary", wrap=True)
-        box = QWidget()
-        layout = QHBoxLayout(box)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(4)
-        if row.result == "saved":
-            actions: tuple[tuple[object, IconName], ...] = (
-                (s.HISTORY_OPEN, "Play"),
-                (s.SHOW_IN_FOLDER, "FolderOpen"),
-            )
-            for text, icon in actions:
-                layout.addWidget(
-                    Button(tr(text), ButtonKind.SUBTLE, icon=icon, size=ButtonSize.SMALL)
-                )
-        else:
-            layout.addWidget(
-                Button(
-                    tr(s.HISTORY_DETAILS), ButtonKind.SUBTLE, icon="FileText", size=ButtonSize.SMALL
-                )
-            )
-        layout.addStretch()
-        return box
-
-    def set_compact(self, compact: bool) -> None:
-        if self.table is not None:
-            self.table_box.removeWidget(self.table)
-            self.table.deleteLater()
-        titles = [tr(t) for t in s.HISTORY_COLUMNS]
-        columns = [Column(titles[0], 110 if compact else 140), Column(titles[1])]
-        if not compact:
-            columns.append(Column(titles[2], 230))
-        columns += [Column(titles[3], 120), Column(titles[4], 84)]
-        if not compact:
-            columns.append(Column(titles[5], 72))
-        columns.append(Column(titles[6], 210 if compact else 240))
-        table = GridTable(columns)
-        for row in EXAMPLE_HISTORY:
-            file_cell = QWidget()
-            file_layout = QVBoxLayout(file_cell)
-            file_layout.setContentsMargins(0, 0, 0, 0)
-            file_layout.setSpacing(0)
-            file_layout.addWidget(_elided(row.source, TextStyle.BODY_STRONG))
-            second = f"→ {row.output}" if row.output else tr(s.HISTORY_NO_FILE)
-            if compact:
-                second += f" · {row.target}"
-            file_layout.addWidget(_elided(second, TextStyle.CAPTION, "secondary"))
-            cells: list[QWidget] = [label(row.when, tone="secondary"), file_cell]
-            if not compact:
-                cells.append(_elided(row.target))
-            cells += [self._result(row), label(row.size)]
-            if not compact:
-                cells.append(label(row.took))
-            cells.append(self._actions(row))
-            table.add_row(cells)
-        self.table = table
-        self.table_box.addWidget(table)
-
 
 # Settings
 
@@ -518,7 +124,7 @@ def _path_row(path: str, icon: IconName | None = None) -> QWidget:
     return row
 
 
-class SettingsPage(_Page):
+class SettingsPage(Page):
     """Settings; only the Performance switch acts so far."""
 
     hardware_changed = Signal(bool)
@@ -540,7 +146,7 @@ class SettingsPage(_Page):
             status_layout.setSpacing(8)
             status_layout.addWidget(Badge(tr(s.SETTINGS_WORKING), BadgeTone.SUCCESS, "CircleCheck"))
             status_layout.addWidget(
-                _elided(
+                elided(
                     tr(s.SETTINGS_FOUND).format(
                         version=version or "", folder=str(tools.ffmpeg.parent)
                     )
@@ -643,7 +249,7 @@ class SettingsPage(_Page):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
         layout.addWidget(PlannedBanner(tr(s.PLANNED_SETTINGS), tr(s.BADGE_PLANNED)))
-        layout.addWidget(_scroll(content), 1)
+        layout.addWidget(page_scroll(content), 1)
 
     def set_hardware_text(self, text: str) -> None:
         self.hardware_help.setText(text)

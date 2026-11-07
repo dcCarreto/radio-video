@@ -2,10 +2,11 @@
 
 Radio/Video is a free and open-source desktop application for converting audio and video files
 between formats. It uses [FFmpeg](https://ffmpeg.org/) for all media processing and provides a
-Qt-based interface. Simple Mode covers common conversions with presets; an Advanced Mode with full
-control over encoding parameters is planned.
+Qt-based interface. Simple Mode covers common conversions with presets; Advanced Mode gives full
+control over encoding parameters, tracks and filters.
 
-> **Status:** early development. Media analysis, Simple Mode conversion and previews work; see
+> **Status:** early development. Media analysis, Simple and Advanced Mode conversion and previews
+> work; see
 > [Current Features](#current-features) for details and [Planned Features](#planned-features)
 > for what is still missing.
 
@@ -36,13 +37,18 @@ control over encoding parameters is planned.
 - Main window in a light or dark theme that follows Windows, with a step strip (Open, Check,
   Choose, Preview, Convert) and a status bar showing the conversion engine:
   - Start screen: drop a file or open it with the button or Ctrl+O. Reading the file runs in the
-    background. Several files, folders and drops during a conversion are refused with the reason.
+    background. Several files go to the queue; folders, and a single file dropped during a
+    conversion, are refused with the reason.
   - When FFmpeg is missing, a one-time setup page shows the winget command (with Copy), the
     environment variables for a custom location and a Check Again button.
   - A loaded file shows a plain-language summary ("1 video track, 3 audio tracks (Portuguese,
     English)…"), container facts and every track with codec, details, language, title and the
     default flag.
-  - Keyboard: Ctrl+O, Ctrl+Enter (convert), Ctrl+P and Ctrl+Shift+P (previews), Esc (cancel),
+  - Play opens the loaded file in the built-in player as it is, without converting anything,
+    and stays available during a conversion. The original and converted previews link to each
+    other for a quick comparison.
+  - Keyboard: Ctrl+O, Ctrl+Enter (convert), Ctrl+P and Ctrl+Shift+P (previews),
+    Ctrl+Shift+Space (play the original), Ctrl+Shift+Enter (add to the queue), Esc (cancel),
     Ctrl+1–4 (tabs), F1 (About); a visible focus ring for keyboard use.
   - Conversion progress also shows on the taskbar button, and a notification reports the result
     when the window is in the background.
@@ -80,10 +86,44 @@ control over encoding parameters is planned.
     as a button and the technical details one click away.
   - Settings and opening other files are locked while a conversion runs, and closing the window
     asks for confirmation.
-- Planned screens show how upcoming features will work, under a "Planned" banner: Advanced Mode
-  (Video, Audio, Tracks and Output and filters, each setting explained, with a live output
-  summary; Ctrl+M switches mode), Queue, History and Settings. Their settings don't act yet,
-  except the hardware acceleration switch in Settings.
+- Advanced Mode (Ctrl+M switches mode), each setting explained with its recommended value and
+  a live output summary; Simple choices carry over:
+  - Video: stream copy (offered only when the container can hold the source codec), software or
+    graphics card encoder, constant quality (CRF) or target bitrate, preset, resolution (never
+    upscaled), aspect ratio, frame rate and pixel format (including 10-bit for H.265 and VP9).
+  - Audio: codec (only those the container can hold, or a copy of the original), bitrate,
+    sample rate and channels, applied to every kept audio track.
+  - Tracks: keep or leave out each track; tracks the format can't hold are disabled with the
+    reason, and audio-only formats keep one audio track.
+  - Output and filters: container (MP4 or MKV for the same codecs), deinterlacing (automatic
+    for frames marked as interlaced, off or always), fast start for web playback, metadata
+    and chapters, and loudness normalization (EBU R128).
+  - Back in Simple Mode, "Quality: Custom (set in Advanced)" shows with a Reset to Balanced
+    button. Choosing a quality resets the quality levels; switching formats resets the
+    codec-specific choices and tracks.
+- Queue: convert many files one after another, each with its own format, quality and Advanced
+  choices.
+  - Add files with **Add Files…**, by dropping several files on the window (also during a
+    conversion), or with **Add to Queue** (Ctrl+Shift+Enter) on the Convert tab, which keeps
+    every setting of the open file. Files are read in the background; unreadable ones are
+    listed with the reason.
+  - Each row shows the target format, a status badge, live progress or the result (time taken,
+    the reason for a failure, where it was canceled) and the size: estimated while waiting
+    when the bitrate fixes it, measured when done.
+  - Start Queue / Stop Queue, Pause after the current file, Move Up/Down (Alt+Up/Down),
+    Retry, Remove (Delete) and Clear Finished. The footer shows "File 2 of 6", overall
+    progress and the counts per status; the tab shows how many files are left.
+  - Only one conversion runs at a time: Convert is unavailable while the queue runs, and the
+    queue can start once a conversion on the Convert tab finishes. Progress shows in the status bar and on the
+    taskbar, a notification reports when the queue finishes, and quitting asks first.
+- History: the latest 100 conversions from the Convert tab and the queue, newest first, kept in
+  a file on this computer only. Each row shows when, the source and output names, the format
+  and quality ("· Custom" after Advanced changes), the result (Saved, Failed, Canceled, or
+  File moved when the output is no longer there), size and time taken. Saved files can be
+  opened or shown in their folder; failures open the explanation and technical details.
+  Clear History… asks first and never touches the converted files.
+- The Settings screen is still a preview under a "Planned" banner; only its hardware
+  acceleration switch acts.
 - Converted preview window:
   - **Preview 15 s** converts a 15-second sample, starting a third of the way into the file, with
     the exact settings. Files of 15 seconds or less are converted entirely. **Full Preview**
@@ -91,6 +131,8 @@ control over encoding parameters is planned.
   - The window always says it shows the converted output, never the original: a "Converted
     preview" badge stays on the picture. Audio previews show the track as it sounds in the
     output.
+  - Files with several audio tracks or with subtitles get an audio track menu and a subtitles
+    menu (off by default); text subtitles are drawn over the picture.
   - Playback-only controls (play/pause, seek, mute, volume) with Space/K, Left/Right, M and Esc;
     Ctrl+Enter converts the full file with the same settings.
   - A side panel shows the part previewed, the preview size, the estimated full size (measured
@@ -101,10 +143,7 @@ control over encoding parameters is planned.
 
 ## Planned Features
 
-- Advanced Mode: video and audio codecs, bitrate, CRF, resolution, aspect ratio, frame rate,
-  pixel format, sample rate, channels, filters, track selection and container options.
-- Batch conversion, conversion queue and conversion history.
-- Stream copy when re-encoding is not needed.
+- Settings: default folder, formats and quality, temporary files location and theme.
 
 ## Technology Stack
 
@@ -236,6 +275,38 @@ The branch model, commit conventions and pull request process are described in
 ## Future Updates
 
 A cumulative history of changes merged into `dev`, newest first.
+
+### 2026-11-07
+
+- **#53 feat: choose the audio track and subtitles in the player**: files with several audio
+  tracks or with subtitles get menus in the preview window's player to switch the audio track
+  and turn subtitles on, with each track named by its language and title. Text subtitles are
+  shown over the picture.
+- **#51 feat: keep a history of conversions**: the History tab lists the latest 100 conversions
+  from the Convert tab and the queue, stored only on this computer, with the result, size and
+  time taken. Saved files can be opened or shown in their folder, failures show what happened,
+  and files moved since show as such. Clear History asks first and keeps the converted files.
+- **#49 feat: convert many files with the queue**: the Queue tab converts files one after
+  another, each with its own format, quality and Advanced choices. Add files with Add Files…,
+  by dropping several files on the window, or with Add to Queue on the Convert tab; start,
+  stop, pause after the current file, reorder, retry and remove them, with live progress, a
+  notification when the queue finishes and a confirmation before quitting.
+- **#47 fix: retry the FFmpeg download when the daily build is being replaced**: the installer
+  build reads the FFmpeg release again and retries when the daily rebuild briefly removes the
+  file it was about to download, instead of failing.
+- **#45 feat: make Advanced Mode work**: every setting on the Video, Audio, Tracks and Output
+  and filters tabs now changes the conversion and the previews: stream copy, software or
+  graphics card encoder, constant quality or target bitrate, preset, resolution, aspect ratio,
+  frame rate, pixel format, audio codec or copy, bitrate, sample rate, channels, per-track
+  choice, MP4/MKV switch, deinterlacing, fast start, metadata and loudness normalization. Only
+  options that fit the format and the file are offered. Simple Mode shows when Advanced choices
+  are in effect and can reset them; MP4 files now start playing on the web before they finish
+  downloading.
+- **#43 feat: play the opened file as it is, without converting**: a Play button next to Open
+  (Ctrl+Shift+Space) opens the loaded file in the built-in player straight away, showing its size
+  and every track, with nothing converted or written. It stays available during a conversion,
+  offers a converted preview when the player can't open the file, and the original and converted
+  previews link to each other for a quick comparison.
 
 ### 2026-11-03
 

@@ -1,7 +1,9 @@
-"""Converted preview: makes a sample (or the whole file) with the exact settings and plays it.
+"""Preview window: plays a converted preview or the opened file itself.
 
-The window always says that it shows the converted output, measures the real size, and
-offers to convert the full file with the same settings.
+A converted preview is made with the exact settings (a sample or the whole file); the window
+always says that it shows the converted output, measures the real size, and offers to convert
+the full file with the same settings. The original player converts nothing: it plays the
+opened file as it is, so the two can be compared.
 """
 
 from __future__ import annotations
@@ -11,9 +13,9 @@ from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 
-from PySide6.QtCore import QRectF, QSize, Qt, QUrl, Signal, Slot
+from PySide6.QtCore import QLocale, QRectF, QSize, Qt, QUrl, Signal, Slot
 from PySide6.QtGui import QCloseEvent, QKeyEvent, QPaintEvent, QResizeEvent, QShowEvent
-from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
+from PySide6.QtMultimedia import QAudioOutput, QMediaMetaData, QMediaPlayer
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -28,6 +30,7 @@ from radio_video.ffmpeg.progress import ProgressUpdate
 from radio_video.models.conversion import ConversionSettings
 from radio_video.models.media import MediaInfo
 from radio_video.models.presets import OutputFormat, Quality
+from radio_video.models.tracks import StreamMap
 from radio_video.services.conversion import ConversionError
 from radio_video.services.preview import PreviewGenerator, PreviewSample, short_preview_range
 from radio_video.services.preview import PreviewKind as ServiceKind
@@ -35,6 +38,7 @@ from radio_video.ui import icons, theme
 from radio_video.ui import strings as s
 from radio_video.ui import viewmodel as vm
 from radio_video.ui.errors_map import ErrorKind, Failure, describe
+from radio_video.ui.icons import IconName
 from radio_video.ui.native.dwm import style_title_bar
 from radio_video.ui.state import PreviewKind, Progress
 from radio_video.ui.strings import tr
@@ -80,6 +84,11 @@ class PreviewRequest:
     calculated_size: int | None = None
     # The settings to convert with; the format's own settings when not given.
     settings: ConversionSettings | None = None
+    # The tracks to map; the format's own choice when not given.
+    streams: StreamMap | None = None
+
+    def plan(self) -> StreamMap:
+        return self.streams if self.streams is not None else self.fmt.plan(self.media)
 
 
 class _Area(QFrame):
@@ -127,9 +136,26 @@ def _value(title: str, value: QWidget) -> QVBoxLayout:
     return box
 
 
+def track_label(index: int, metadata: QMediaMetaData) -> str:
+    """ "Track 2 · English · English dub"; the number counts from 1."""
+    parts = [tr(s.PLAYER_TRACK).format(number=index + 1)]
+    language = metadata.value(QMediaMetaData.Key.Language)
+    if isinstance(language, QLocale.Language) and language not in (
+        QLocale.Language.AnyLanguage,
+        QLocale.Language.C,
+    ):
+        parts.append(QLocale.languageToString(language))
+    title = metadata.value(QMediaMetaData.Key.Title)
+    if isinstance(title, str) and title.strip():
+        parts.append(title.strip())
+    return " · ".join(parts)
+
+
 class PreviewWindow(QWidget):
     convert_requested = Signal()
     retry_requested = Signal(PreviewKind)
+    # The other kind of preview: the original from a converted one, and the reverse.
+    switch_requested = Signal(PreviewKind)
     progress = Signal(Progress)
     ready = Signal(object)
     failed = Signal()
@@ -149,12 +175,17 @@ class PreviewWindow(QWidget):
         self.setWindowFlag(Qt.WindowType.Window)
         self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
         self.request = request
+        self.original = request.kind is PreviewKind.ORIGINAL
         self.phase = Phase.CREATING
         self._autoplay = autoplay
+        self._locked = False
         self._sample: PreviewSample | None = None
         self._last_time: float | None = None
         media = request.media
-        self.setWindowTitle(tr(s.PREVIEW_WINDOW_TITLE).format(name=media.path.stem))
+        if self.original:
+            self.setWindowTitle(tr(s.ORIGINAL_WINDOW_TITLE).format(name=media.path.name))
+        else:
+            self.setWindowTitle(tr(s.PREVIEW_WINDOW_TITLE).format(name=media.path.stem))
         self.setWindowIcon(icons.app_icon())
         self.resize(SIZE_COMPACT if compact else SIZE)
 
@@ -167,8 +198,11 @@ class PreviewWindow(QWidget):
         self.audio_output = QAudioOutput(self)
         self.audio_output.setVolume(0.8)
         self.player.setAudioOutput(self.audio_output)
+        self.player.errorOccurred.connect(self._on_player_error)
 
         what = vm.format_and_quality(request.fmt, request.quality)
+        badge_text = tr(s.ORIGINAL_BADGE if self.original else s.PREVIEW_BADGE)
+        badge_icon: IconName = "Play" if self.original else "Eye"
         self.part = label("", tone="secondary")
         header = _Band(rule_below=True, rule_width=2)
         header_layout = QVBoxLayout(header)
@@ -176,15 +210,18 @@ class PreviewWindow(QWidget):
         header_layout.setSpacing(4)
         top = QHBoxLayout()
         top.setSpacing(8)
-        top.addWidget(Badge(tr(s.PREVIEW_BADGE), BadgeTone.ACCENT, "Eye"))
+        top.addWidget(Badge(badge_text, BadgeTone.ACCENT, badge_icon))
         top.addWidget(self.part, 1)
         header_layout.addLayout(top)
-        header_layout.addWidget(ElidedLabel(what, TextStyle.TITLE))
+        title = media.path.name if self.original else what
+        header_layout.addWidget(
+            ElidedLabel(title, TextStyle.TITLE, mode=Qt.TextElideMode.ElideMiddle)
+        )
 
         # Area: state card, video canvas or audio card
-        self.canvas = VideoCanvas(tr(s.PREVIEW_BADGE))
+        self.canvas = VideoCanvas(badge_text, badge_icon)
         self.player.setVideoOutput(self.canvas.sink)
-        self.audio_card = self._make_audio_card(what)
+        self.audio_card = self._make_audio_card(what, badge_text, badge_icon)
         self.state_area = _Area()
         self.card = Card()
         self.state_area.card = self.card
@@ -203,7 +240,9 @@ class PreviewWindow(QWidget):
         for page in (self.state_area, self.canvas, self.audio_card):
             self.area.addWidget(page)
 
-        self.ready_note = Note(tr(s.PREVIEW_READY_NOTE), "Info", "accent")
+        self.ready_note = Note(
+            tr(s.ORIGINAL_NOTE if self.original else s.PREVIEW_READY_NOTE), "Info", "accent"
+        )
         self.player_bar = Player(
             play_tip=tr(s.PLAYER_PLAY),
             pause_tip=tr(s.PLAYER_PAUSE),
@@ -211,7 +250,13 @@ class PreviewWindow(QWidget):
             mute_tip=tr(s.PLAYER_MUTE),
             unmute_tip=tr(s.PLAYER_UNMUTE),
             volume_tip=tr(s.PLAYER_VOLUME),
+            audio_tip=tr(s.PLAYER_AUDIO_TRACK),
+            subtitles_tip=tr(s.PLAYER_SUBTITLES),
         )
+        self.player_bar.audio_track_chosen.connect(self.player.setActiveAudioTrack)
+        self.player_bar.subtitle_track_chosen.connect(self.player.setActiveSubtitleTrack)
+        self.player.tracksChanged.connect(self._on_tracks)
+        self.player.activeTracksChanged.connect(self._on_active_tracks)
         self.player_bar.play_toggled.connect(self.toggle_playback)
         self.player_bar.seek_requested.connect(self.player.setPosition)
         self.player_bar.mute_toggled.connect(self.toggle_mute)
@@ -248,14 +293,24 @@ class PreviewWindow(QWidget):
         footer_layout.addStretch()
         self.close_button = Button(tr(s.CLOSE), shortcut_hint=tr(s.SHORTCUT_CANCEL))
         self.close_button.clicked.connect(self.close)
+        if self.original:
+            self.switch_button = Button(tr(s.ORIGINAL_PREVIEW_CONVERTED), icon="Eye")
+            self.switch_button.setToolTip(tr(s.ORIGINAL_PREVIEW_CONVERTED_TOOLTIP))
+            self._switch_kind = PreviewKind.SAMPLE
+        else:
+            self.switch_button = Button(tr(s.PREVIEW_PLAY_ORIGINAL), icon="Play")
+            self.switch_button.setToolTip(tr(s.PREVIEW_PLAY_ORIGINAL_TOOLTIP))
+            self._switch_kind = PreviewKind.ORIGINAL
+        self.switch_button.clicked.connect(self._switch)
         self.convert_button = Button(
-            tr(s.PREVIEW_CONVERT_FULL),
+            tr(s.CONVERT if self.original else s.PREVIEW_CONVERT_FULL),
             ButtonKind.PRIMARY,
             icon="ArrowRightLeft",
             shortcut_hint=tr(s.SHORTCUT_CONVERT),
         )
         self.convert_button.clicked.connect(self._convert)
         footer_layout.addWidget(self.close_button)
+        footer_layout.addWidget(self.switch_button)
         footer_layout.addWidget(self.convert_button)
 
         layout = QVBoxLayout(self)
@@ -265,28 +320,32 @@ class PreviewWindow(QWidget):
         layout.addLayout(body, 1)
         layout.addWidget(footer)
         theme.current().changed.connect(self._on_theme_changed)
-        self._set_phase(Phase.CREATING)
+        # The original has nothing to create: it is ready as soon as the window opens.
+        self._set_phase(Phase.READY if self.original else Phase.CREATING)
 
     # Building blocks
-    def _make_audio_card(self, what: str) -> QWidget:
+    def _make_audio_card(self, what: str, badge_text: str, badge_icon: IconName) -> QWidget:
         area = _Area()
         layout = QVBoxLayout(area)
         layout.setContentsMargins(24, 12, 24, 24)
         layout.setSpacing(0)
         layout.addWidget(
-            Badge(tr(s.PREVIEW_BADGE), BadgeTone.ACCENT, "Eye"), 0, Qt.AlignmentFlag.AlignLeft
+            Badge(badge_text, BadgeTone.ACCENT, badge_icon), 0, Qt.AlignmentFlag.AlignLeft
         )
         layout.addStretch()
         music = StatusIcon(40)
         music.set_icon("Music")
         layout.addWidget(music)
         layout.addSpacing(12)
-        layout.addWidget(label(tr(s.PREVIEW_AUDIO_TITLE), TextStyle.TITLE))
+        title = s.ORIGINAL_AUDIO_TITLE if self.original else s.PREVIEW_AUDIO_TITLE
+        layout.addWidget(label(tr(title), TextStyle.TITLE))
         fmt, media = self.request.fmt, self.request.media
-        track = vm.output_track_text(fmt, media, fmt.plan(media))
-        self.audio_text = label(
-            tr(s.PREVIEW_AUDIO_TEXT).format(settings=what, track=track), tone="secondary", wrap=True
-        )
+        if self.original:
+            text = vm.source_summary(media)
+        else:
+            track = vm.output_track_text(fmt, media, self.request.plan())
+            text = tr(s.PREVIEW_AUDIO_TEXT).format(settings=what, track=track)
+        self.audio_text = label(text, tone="secondary", wrap=True)
         layout.addWidget(self.audio_text)
         return area
 
@@ -334,19 +393,24 @@ class PreviewWindow(QWidget):
         layout = QVBoxLayout(content)
         layout.setContentsMargins(20, 16, 20, 16)
         layout.setSpacing(14)
-        layout.addWidget(kicker(tr(s.PREVIEW_SIDE_TITLE)))
+        original = self.original
+        layout.addWidget(kicker(tr(s.ORIGINAL_SIDE_TITLE if original else s.PREVIEW_SIDE_TITLE)))
         self.side_part = label("", wrap=True)
         layout.addLayout(_value(tr(s.PREVIEW_PART), self.side_part))
         self.side_size = label("", TextStyle.BODY_STRONG, wrap=True)
-        layout.addLayout(_value(tr(s.PREVIEW_SIZE), self.side_size))
+        layout.addLayout(
+            _value(tr(s.ORIGINAL_SIZE if original else s.PREVIEW_SIZE), self.side_size)
+        )
         self.side_estimate = label("", TextStyle.BODY_STRONG, wrap=True)
         self.side_estimate_how = label("", TextStyle.CAPTION, "secondary", wrap=True)
-        estimate = _value(tr(s.PREVIEW_FULL_SIZE), self.side_estimate)
-        estimate.addWidget(self.side_estimate_how)
-        layout.addLayout(estimate)
+        if not original:
+            # The original is not converted, so there is no output size to estimate.
+            estimate = _value(tr(s.PREVIEW_FULL_SIZE), self.side_estimate)
+            estimate.addWidget(self.side_estimate_how)
+            layout.addLayout(estimate)
         layout.addSpacing(8)
         layout.addWidget(Rule())
-        layout.addWidget(kicker(tr(s.PREVIEW_SETTINGS_USED)))
+        layout.addWidget(kicker(tr(s.ORIGINAL_CONTENTS if original else s.PREVIEW_SETTINGS_USED)))
         for title, value in self.request.contents:
             layout.addLayout(_value(title, label(value, wrap=True)))
         layout.addStretch()
@@ -366,6 +430,8 @@ class PreviewWindow(QWidget):
 
     # Generation
     def start(self) -> bool:
+        if self.original:
+            return self._play_original()
         request = self.request
         kind = ServiceKind.SHORT if request.kind is PreviewKind.SAMPLE else ServiceKind.FULL
         self._sample = None
@@ -378,7 +444,7 @@ class PreviewWindow(QWidget):
                 request.settings or request.fmt.settings(request.quality),
                 request.fmt.extension,
                 kind,
-                request.fmt.plan(request.media),
+                request.plan(),
             )
         except (ConversionError, ValueError, OSError) as exc:
             self._show_failure(str(exc))
@@ -386,9 +452,61 @@ class PreviewWindow(QWidget):
         self._set_phase(Phase.CREATING)
         return True
 
+    def _play_original(self) -> bool:
+        """Play the opened file directly: nothing is converted or written."""
+        path = self.request.media.path
+        if not path.is_file():
+            self._show_failure(f"{path}: No such file or directory")
+            return False
+        self.canvas.clear()
+        self._set_phase(Phase.READY)
+        self.player.setSource(QUrl.fromLocalFile(str(path)))
+        if self._autoplay:
+            self.player.play()
+        return True
+
+    # Tracks
+    @Slot()
+    def _on_tracks(self) -> None:
+        audio = [track_label(i, m) for i, m in enumerate(self.player.audioTracks())]
+        subtitles = [track_label(i, m) for i, m in enumerate(self.player.subtitleTracks())]
+        has_picture = self.area.currentWidget() is self.canvas
+        self.player_bar.audio_menu.set_tracks(
+            list(enumerate(audio)), self.player.activeAudioTrack(), visible=len(audio) > 1
+        )
+        off = [(-1, tr(s.PLAYER_SUBTITLES_OFF))]
+        self.player_bar.subtitle_menu.set_tracks(
+            off + list(enumerate(subtitles)),
+            self.player.activeSubtitleTrack(),
+            visible=bool(subtitles) and has_picture,
+        )
+
+    @Slot()
+    def _on_active_tracks(self) -> None:
+        bar = self.player_bar
+        bar.audio_menu.set_active(
+            self.player.activeAudioTrack(), list(range(len(self.player.audioTracks())))
+        )
+        indices = [-1, *range(len(self.player.subtitleTracks()))]
+        bar.subtitle_menu.set_active(self.player.activeSubtitleTrack(), indices)
+        if self.player.activeSubtitleTrack() < 0:
+            self.canvas.set_subtitle("")
+
+    @Slot(QMediaPlayer.Error, str)
+    def _on_player_error(self, error: QMediaPlayer.Error, message: str) -> None:
+        if error is QMediaPlayer.Error.NoError or not self.original:
+            return
+        logger.info("The original can't be played here: %s", message)
+        self.card_text.setText(tr(s.ORIGINAL_FAILED_TEXT))
+        self.card_help.setText(tr(s.ORIGINAL_FAILED_DO))
+        self.card_log.setPlainText(message)
+        self._set_phase(Phase.FAILED)
+
     def part_text(self) -> str:
         duration = self.request.media.duration
         total = format_duration(duration)
+        if self.original:
+            return tr(s.PREVIEW_PART_FULL).format(total=total)
         if self.request.kind is PreviewKind.SAMPLE:
             start, length = short_preview_range(duration)
             if length is not None:
@@ -427,7 +545,10 @@ class PreviewWindow(QWidget):
 
     def _show_failure(self, message: str) -> None:
         report = describe(Failure(details=message, source=self.request.media.path))
-        if report.kind is ErrorKind.UNREADABLE and self._last_time is not None:
+        if self.original:
+            self.card_text.setText(report.what_happened)
+            self.card_help.setText(report.what_to_do)
+        elif report.kind is ErrorKind.UNREADABLE and self._last_time is not None:
             start = self.generator.runner.job.start if self.generator.runner.job else 0
             at = format_duration((start or 0) + self._last_time)
             self.card_text.setText(tr(s.PREVIEW_FAILED_AT).format(time=at))
@@ -450,12 +571,32 @@ class PreviewWindow(QWidget):
     def _on_card_action(self) -> None:
         if self.phase is Phase.CREATING:
             self.cancel()
+        elif self.original:
+            # The player can't open the file; a converted preview still can.
+            self._switch()
         else:
             self.retry_requested.emit(self.request.kind)
 
+    def _switch(self) -> None:
+        if self.phase is not Phase.CREATING and self.switch_button.isEnabled():
+            self.switch_requested.emit(self._switch_kind)
+
     def _convert(self) -> None:
-        if self.phase is Phase.READY:
+        if self.phase is Phase.READY and not self._locked:
             self.convert_requested.emit()
+
+    def set_locked(self, locked: bool) -> None:
+        """While converting the window only plays: no new preview, no second conversion."""
+        if locked != self._locked:
+            self._locked = locked
+            self._set_phase(self.phase)
+
+    def _render_buttons(self) -> None:
+        self.convert_button.setVisible(self.phase is Phase.READY)
+        self.convert_button.setEnabled(not self._locked)
+        # From the original, a converted preview needs the converter, which may be busy.
+        self.switch_button.setVisible(self.phase is not Phase.CREATING)
+        self.switch_button.setEnabled(not (self.original and self._locked))
 
     # Rendering
     def _set_phase(self, phase: Phase) -> None:
@@ -464,9 +605,11 @@ class PreviewWindow(QWidget):
         audio = not self.request.fmt.is_video
         self.part.setText(self.part_text())
         self.side_part.setText(self.part_text())
+        if self.original:
+            audio = not self.request.media.has_video
         self.ready_note.setVisible(ready)
         self.player_bar.setVisible(ready)
-        self.convert_button.setVisible(ready)
+        self._render_buttons()
         if ready:
             self.area.setCurrentWidget(self.audio_card if audio else self.canvas)
         else:
@@ -496,6 +639,13 @@ class PreviewWindow(QWidget):
             self.card_action.set_kind(ButtonKind.DANGER)
             self.card_action.set_icon_name("X")
             self.card_action.set_shortcut_hint(tr(s.SHORTCUT_CANCEL))
+        elif failed and self.original:
+            self.card_icon.set_icon("CircleX", "danger")
+            self.card_title.setText(tr(s.ORIGINAL_FAILED_TITLE))
+            self.card_action.setText(tr(s.ORIGINAL_PREVIEW_CONVERTED))
+            self.card_action.set_kind(ButtonKind.PRIMARY)
+            self.card_action.set_icon_name("Eye")
+            self.card_action.set_shortcut_hint(None)
         elif failed:
             self.card_icon.set_icon("CircleX", "danger")
             self.card_title.setText(tr(s.PREVIEW_FAILED_TITLE))
@@ -511,9 +661,13 @@ class PreviewWindow(QWidget):
             self.card_action.set_kind(ButtonKind.PRIMARY)
             self.card_action.set_icon_name("Eye")
             self.card_action.set_shortcut_hint(None)
+        self.card_action.setEnabled(not (failed and self.original and self._locked))
         self.card_action.updateGeometry()
 
     def _render_side(self) -> None:
+        if self.original:
+            self.side_size.setText(format_size(self.request.media.size))
+            return
         sample = self._sample if self.phase is Phase.READY else None
         if sample is not None:
             length = sample.length or self.request.media.duration

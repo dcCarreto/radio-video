@@ -5,11 +5,16 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from PySide6.QtCore import QStandardPaths
 
 from radio_video.ffmpeg import FFmpegNotFoundError, FFmpegTools, locate_tools
 
 # CI sets this so a missing FFmpeg fails the run instead of silently skipping tests.
 REQUIRE_FFMPEG = os.environ.get("RADIO_VIDEO_REQUIRE_FFMPEG") == "1"
+
+# Windows created by tests keep their history and other files in Qt's test folders, never
+# in the real user profile.
+QStandardPaths.setTestModeEnabled(True)
 
 
 @pytest.fixture(scope="session")

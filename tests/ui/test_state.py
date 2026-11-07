@@ -240,3 +240,22 @@ def test_tabs_navigate_between_pages() -> None:
     assert machine.state.page is Page.HISTORY
     machine.go(Page.CONVERT)
     assert _screen(machine) is Screen.MAIN
+
+
+def test_original_player_is_ready_at_once_and_never_outdated() -> None:
+    machine = _loaded()
+    assert machine.preview_requested(PreviewKind.ORIGINAL)
+    assert machine.state.dialog is Dialog.PREVIEW
+    assert _phase(machine) is PreviewPhase.READY
+    assert not machine.state.previewing
+    machine.set_quality(Quality.HIGH)
+    assert not machine.preview_outdated()
+    assert machine.state.measured_size is None
+    assert machine.escape_action() is EscapeAction.CLOSE_DIALOG
+
+
+def test_original_player_stays_available_while_converting() -> None:
+    machine = _converting()
+    assert not machine.preview_requested(PreviewKind.SAMPLE)
+    assert machine.preview_requested(PreviewKind.ORIGINAL)
+    assert machine.state.job is Job.CONVERTING

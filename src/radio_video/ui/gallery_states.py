@@ -9,6 +9,7 @@ from __future__ import annotations
 import tempfile
 from collections.abc import Callable
 from dataclasses import dataclass, replace
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from PySide6.QtCore import QPoint, QSettings, QSize
@@ -16,12 +17,15 @@ from PySide6.QtGui import QColor, QImage, QLinearGradient, QPainter, QPixmap
 from PySide6.QtWidgets import QApplication, QDialog, QWidget
 
 from radio_video.ffmpeg.locator import FFmpegTools
+from radio_video.models.advanced import AdvancedChoices
 from radio_video.models.estimate import estimate_output_size
 from radio_video.models.hardware import NVENC, HardwareSupport
 from radio_video.models.media import MediaInfo
-from radio_video.models.presets import OUTPUT_FORMATS, OutputFormat
+from radio_video.models.presets import OUTPUT_FORMATS, OutputFormat, Quality
+from radio_video.services.history import HistoryRecord, HistoryResult
 from radio_video.services.preview import PreviewKind as ServiceKind
 from radio_video.services.preview import PreviewSample
+from radio_video.services.queue import QueueStatus
 from radio_video.ui import viewmodel as vm
 from radio_video.ui.demo import DEMO_FOLDER, DEMO_MEDIA
 from radio_video.ui.dialogs.failed_dialog import FailedDialog
@@ -69,7 +73,9 @@ def demo_window(size: str = "l") -> MainWindow:
         hardware=HardwareSupport(NVENC, NVENC.encoders, "NVIDIA GeForce RTX 3060"),
         hardware_checked=True,
     )
-    window = MainWindow(engine, settings=settings)
+    history = Path(tempfile.gettempdir()) / "rv-gallery-history.json"
+    history.unlink(missing_ok=True)
+    window = MainWindow(engine, settings=settings, history_path=history)
     window.output_namer = _demo_names
     window.folder_writable = lambda _folder: True
     window.resize(SIZES[size])
@@ -148,6 +154,203 @@ def _advanced(tab: str) -> Callable[[MainWindow], None]:
         window.convert_page.file.panel.advanced.tabs.set_current(tab)
 
     return apply
+
+
+def _custom(window: MainWindow) -> None:
+    _loaded(window)
+    window.machine.set_advanced(AdvancedChoices(crf=20, preset="slow", height=720))
+
+
+# File, format, quality, status, fraction, size, took, error
+DEMO_QUEUE: tuple[
+    tuple[str, str, Quality, QueueStatus, float, int | None, float | None, str], ...
+] = (
+    (
+        "Interview – Lisbon Studio Session (Final Cut, 2026-03-14).mkv",
+        "mp4-h264",
+        Quality.BALANCED,
+        QueueStatus.DONE,
+        1.0,
+        22 * MB + 400 * 1024,
+        43.0,
+        "",
+    ),
+    (
+        "Rehearsal day 2 – wide camera.mov",
+        "mp4-h265",
+        Quality.SMALL,
+        QueueStatus.CONVERTING,
+        0.42,
+        None,
+        None,
+        "",
+    ),
+    ("Podcast ep. 41 – raw.wav", "mp3", Quality.BALANCED, QueueStatus.WAITING, 0, None, None, ""),
+    (
+        "B-roll_harbour_0412.mp4",
+        "webm-vp9",
+        Quality.BALANCED,
+        QueueStatus.FAILED,
+        0.3,
+        None,
+        None,
+        "No space left on device",
+    ),
+    (
+        "Voice memo 2026-02-11 08.14.m4a",
+        "opus",
+        Quality.BALANCED,
+        QueueStatus.WAITING,
+        0,
+        None,
+        None,
+        "",
+    ),
+    (
+        "Old family tape (VHS transfer).avi",
+        "mkv-h264",
+        Quality.HIGH,
+        QueueStatus.CANCELED,
+        0.18,
+        None,
+        None,
+        "",
+    ),
+)
+
+
+def _queue_demo(window: MainWindow) -> None:
+    """The design's example queue: one file of every status, the second one converting."""
+    _loaded(window)
+    queue = window.queue
+    if queue is None:
+        return
+    for name, key, quality, status, fraction, size, took, error in DEMO_QUEUE:
+        path = DEMO_FOLDER / name
+        if status is QueueStatus.FAILED:
+            # The source must exist, otherwise the failure reads as "the original was moved".
+            path = Path(tempfile.gettempdir()) / name
+            path.touch()
+        media = replace(DEMO_MEDIA, path=path)
+        entry = queue.add(media.path, key, quality, AdvancedChoices(), DEMO_FOLDER, media)
+        queue._replace(
+            replace(
+                entry,
+                status=status,
+                fraction=fraction,
+                size=size,
+                took=took,
+                error=error,
+                speed=3.1 if status is QueueStatus.CONVERTING else None,
+                remaining=25.0 if status is QueueStatus.CONVERTING else None,
+            )
+        )
+        if status is QueueStatus.CONVERTING:
+            queue._current = entry.id
+    queue._running = True
+    window.machine.go(Page.QUEUE)
+    window._render_queue()
+    page = window.queue_page
+    if page.view is not None:
+        page.select(page.view.rows[3].entry_id)
+
+
+def _history_demo(window: MainWindow) -> None:
+    """The design's example history, newest first; saved files exist, one was moved."""
+    folder = Path(tempfile.gettempdir()) / "rv-gallery-outputs"
+    folder.mkdir(exist_ok=True)
+    now = datetime.now().replace(second=0, microsecond=0)
+    yesterday = now - timedelta(days=1)
+    rows = (
+        (
+            now.replace(hour=14, minute=32),
+            "Interview – Lisbon Studio Session (Final Cut, 2026-03-14).mkv",
+            "Interview – Lisbon Studio Session (Final Cut, 2026-03-14) (1).mp4",
+            "mp4-h264",
+            "Balanced",
+            HistoryResult.SAVED,
+            22 * MB + 400 * 1024,
+            43.0,
+            "",
+        ),
+        (
+            now.replace(hour=11, minute=5),
+            "Podcast ep. 40 – raw.wav",
+            "Podcast ep. 40 – raw.mp3",
+            "mp3",
+            "Balanced",
+            HistoryResult.SAVED,
+            38 * MB + 700 * 1024,
+            12.0,
+            "",
+        ),
+        (
+            yesterday.replace(hour=18, minute=20),
+            "B-roll_harbour_0412.mp4",
+            "",
+            "webm-vp9",
+            "Balanced",
+            HistoryResult.FAILED,
+            None,
+            62.0,
+            "No space left on device",
+        ),
+        (
+            yesterday.replace(hour=9, minute=47),
+            "clip.mov",
+            "clip.mp3",
+            "mp3",
+            "Balanced",
+            HistoryResult.SAVED,
+            121_754,
+            1.0,
+            "",
+        ),
+        (
+            datetime(2026, 10, 3, 16, 10),
+            "Old family tape (VHS transfer).avi",
+            "",
+            "mkv-h264",
+            "High",
+            HistoryResult.CANCELED,
+            None,
+            54.0,
+            "",
+        ),
+        (
+            datetime(2026, 10, 1, 10, 2),
+            "Rehearsal day 1.mov",
+            "Rehearsal day 1.mp4",
+            "mp4-h265",
+            "Small file",
+            HistoryResult.SAVED,
+            1288 * MB,
+            378.0,
+            "",
+        ),
+    )
+    for when, source, output, key, quality, result, size, took, error in reversed(rows):
+        output_path = folder / output if output else None
+        # Every saved file exists except the oldest, which shows as moved.
+        if output_path is not None and source != "Rehearsal day 1.mov":
+            output_path.touch()
+        window.history.add(
+            HistoryRecord(
+                when=when,
+                source=DEMO_FOLDER / source,
+                output=output_path,
+                format_key=key,
+                quality=quality,
+                custom=False,
+                result=result,
+                size=size,
+                took=took,
+                fraction=0.18 if result is HistoryResult.CANCELED else 1.0,
+                error=error,
+            )
+        )
+    _loaded(window)
+    window.machine.go(Page.HISTORY)
 
 
 def _page(page: Page) -> Callable[[MainWindow], None]:
@@ -239,6 +442,29 @@ def _preview(phase: Phase, key: str = "mp4-h264") -> Callable[[MainWindow], None
     return apply
 
 
+def _original(window: MainWindow) -> None:
+    """The opened file played as it is, nothing converted."""
+    _loaded(window)
+    window.machine.preview_requested(PreviewKind.ORIGINAL)
+    state = window.machine.state
+    request = PreviewRequest(
+        DEMO_MEDIA,
+        window.current_format(state),
+        state.quality,
+        PreviewKind.ORIGINAL,
+        vm.original_contents(DEMO_MEDIA),
+    )
+    compact = window.width() < COMPACT_BELOW
+    preview = PreviewWindow(
+        Path("ffmpeg.exe"), request, compact=compact, autoplay=False, parent=window
+    )
+    preview.canvas.show_image(_demo_frame())
+    preview.player_bar.set_duration(133_000)
+    preview.player_bar.set_position(41_000)
+    window.preview_window = preview
+    preview.show()
+
+
 @dataclass(frozen=True)
 class GalleryState:
     key: str
@@ -268,12 +494,18 @@ STATES = (
     GalleryState("pv-audio", "Preview: audio only", _preview(Phase.READY, "mp3")),
     GalleryState("pv-failed", "Preview: failed", _preview(Phase.FAILED)),
     GalleryState("pv-canceled", "Preview: canceled", _preview(Phase.CANCELED)),
+    GalleryState("pv-original", "Original: played as it is", _original),
     GalleryState("quit", "Quit during conversion", _quit),
     GalleryState("about", "About", _about),
-    GalleryState("adv-video", "Advanced Mode: Video (planned)", _advanced("video")),
-    GalleryState("adv-tracks", "Advanced Mode: Tracks (planned)", _advanced("tracks")),
-    GalleryState("queue", "Queue (planned)", _page(Page.QUEUE)),
-    GalleryState("history", "History (planned)", _page(Page.HISTORY)),
+    GalleryState("adv-video", "Advanced Mode: Video", _advanced("video")),
+    GalleryState("adv-audio", "Advanced Mode: Audio", _advanced("audio")),
+    GalleryState("adv-tracks", "Advanced Mode: Tracks", _advanced("tracks")),
+    GalleryState("adv-output", "Advanced Mode: Output and filters", _advanced("output")),
+    GalleryState("custom", "Simple Mode after Advanced changes", _custom),
+    GalleryState("queue", "Queue: running, every status", _queue_demo),
+    GalleryState("queue-empty", "Queue: empty", _page(Page.QUEUE)),
+    GalleryState("history", "History: saved, failed, canceled and moved", _history_demo),
+    GalleryState("history-empty", "History: empty", _page(Page.HISTORY)),
     GalleryState("settings", "Settings (planned)", _page(Page.SETTINGS)),
 )
 

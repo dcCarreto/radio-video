@@ -44,6 +44,9 @@ class Notifier(QObject):
     def conversion_failed(self) -> None:
         self._notify(tr(s.NOTIFY_FAILED_TITLE), tr(s.NOTIFY_FAILED_TEXT), True)
 
+    def queue_finished(self, counts: str, failed: bool) -> None:
+        self._notify(tr(s.NOTIFY_QUEUE_TITLE), counts, failed)
+
     def conversion_stopped(self) -> None:
         self._hide()
 

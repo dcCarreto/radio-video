@@ -1,12 +1,16 @@
 import hashlib
 import struct
+import urllib.error
+from email.message import Message
 from pathlib import Path
 
 import pytest
 
+import build_installer
 from build_installer import (
     Asset,
     BuildError,
+    download_latest_ffmpeg,
     ffmpeg_asset_name,
     numeric_version,
     parse_commit,
@@ -80,3 +84,41 @@ def test_version_resource_has_numbers_and_strings() -> None:
     assert "filevers=(1, 2, 3, 0)" in text
     assert "StringStruct('ProductVersion', '1.2.3')" in text
     assert "StringStruct('OriginalFilename', 'radio-video.exe')" in text
+
+
+def _release(url: str) -> dict[str, object]:
+    name = ffmpeg_asset_name("9.0", "win64-gpl-shared")
+    return {"assets": [{"name": name, "browser_download_url": url, "digest": "sha256:00"}]}
+
+
+def test_ffmpeg_download_asks_again_after_a_404(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    releases = iter([_release("https://x/old.zip"), _release("https://x/new.zip")])
+    monkeypatch.setattr(build_installer, "github_json", lambda path: next(releases))
+    tried: list[str] = []
+
+    def fake_download(url: str, destination: Path) -> Path:
+        tried.append(url)
+        if url.endswith("old.zip"):
+            raise urllib.error.HTTPError(url, 404, "Not Found", Message(), None)
+        return destination
+
+    monkeypatch.setattr(build_installer, "download", fake_download)
+    archive, asset = download_latest_ffmpeg(tmp_path, "9.0", "win64-gpl-shared", wait=0)
+    assert tried == ["https://x/old.zip", "https://x/new.zip"]
+    assert asset.url == "https://x/new.zip"
+    assert archive.parent == tmp_path
+
+
+def test_ffmpeg_download_gives_up_on_other_errors(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(build_installer, "github_json", lambda path: _release("https://x/a.zip"))
+
+    def forbidden(url: str, destination: Path) -> Path:
+        raise urllib.error.HTTPError(url, 403, "Forbidden", Message(), None)
+
+    monkeypatch.setattr(build_installer, "download", forbidden)
+    with pytest.raises(urllib.error.HTTPError):
+        download_latest_ffmpeg(tmp_path, "9.0", "win64-gpl-shared", wait=0)

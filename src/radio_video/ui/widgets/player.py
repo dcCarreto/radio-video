@@ -1,10 +1,10 @@
-"""Playback-only controls: play/pause, time, seek, mute and volume."""
+"""Playback-only controls: play/pause, time, seek, track choice, mute and volume."""
 
 from __future__ import annotations
 
-from PySide6.QtCore import QRectF, QSize, Qt, Signal
-from PySide6.QtGui import QMouseEvent, QPaintEvent
-from PySide6.QtWidgets import QHBoxLayout, QSizePolicy, QSlider, QWidget
+from PySide6.QtCore import QPoint, QRectF, QSize, Qt, Signal, SignalInstance
+from PySide6.QtGui import QAction, QActionGroup, QMouseEvent, QPaintEvent
+from PySide6.QtWidgets import QHBoxLayout, QMenu, QSizePolicy, QSlider, QWidget
 
 from radio_video.ui import theme
 from radio_video.ui.theme.fonts import TextStyle
@@ -64,11 +64,48 @@ class Slider(QSlider):
         super().mousePressEvent(event)
 
 
+class TrackMenu:
+    """A button that opens a menu of tracks, with the current one checked."""
+
+    def __init__(self, button: Button, chosen: SignalInstance) -> None:
+        self.button = button
+        self.menu = QMenu(button)
+        self.group = QActionGroup(self.menu)
+        self.group.setExclusive(True)
+        self._chosen = chosen
+        self.button.clicked.connect(self.open)
+        self.button.hide()
+
+    def set_tracks(self, labels: list[tuple[int, str]], active: int, *, visible: bool) -> None:
+        self.menu.clear()
+        for action in self.group.actions():
+            self.group.removeAction(action)
+        for index, text in labels:
+            action = QAction(text, self.menu)
+            action.setCheckable(True)
+            action.setChecked(index == active)
+            action.triggered.connect(lambda _checked=False, i=index: self._chosen.emit(i))
+            self.group.addAction(action)
+            self.menu.addAction(action)
+        self.button.setVisible(visible)
+
+    def set_active(self, active: int, indices: list[int]) -> None:
+        for index, action in zip(indices, self.group.actions(), strict=False):
+            action.setChecked(index == active)
+
+    def open(self) -> None:
+        below = self.button.mapToGlobal(QPoint(0, self.button.height()))
+        self.menu.popup(below)
+
+
 class Player(QWidget):
     play_toggled = Signal()
     seek_requested = Signal(int)
     mute_toggled = Signal()
     volume_changed = Signal(int)
+    # Track numbers as the media player counts them; -1 turns subtitles off.
+    audio_track_chosen = Signal(int)
+    subtitle_track_chosen = Signal(int)
 
     def __init__(
         self,
@@ -79,6 +116,8 @@ class Player(QWidget):
         mute_tip: str = "Mute (M)",
         unmute_tip: str = "Unmute (M)",
         volume_tip: str = "Volume",
+        audio_tip: str = "Audio track",
+        subtitles_tip: str = "Subtitles",
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
@@ -90,6 +129,14 @@ class Player(QWidget):
         self.seek = Slider()
         self.seek.setToolTip(seek_tip)
         self.seek.setAccessibleName(seek_tip)
+        self.audio_menu = TrackMenu(
+            Button(audio_tip, ButtonKind.SUBTLE, icon="Music", icon_only=True),
+            self.audio_track_chosen,
+        )
+        self.subtitle_menu = TrackMenu(
+            Button(subtitles_tip, ButtonKind.SUBTLE, icon="Captions", icon_only=True),
+            self.subtitle_track_chosen,
+        )
         self.mute_button = Button(mute_tip, ButtonKind.SUBTLE, icon="Volume2", icon_only=True)
         self.volume = Slider()
         self.volume.setRange(0, 100)
@@ -104,6 +151,8 @@ class Player(QWidget):
         layout.addWidget(self.play_button)
         layout.addWidget(self.time)
         layout.addWidget(self.seek, 1)
+        layout.addWidget(self.audio_menu.button)
+        layout.addWidget(self.subtitle_menu.button)
         layout.addWidget(self.mute_button)
         layout.addWidget(self.volume)
 

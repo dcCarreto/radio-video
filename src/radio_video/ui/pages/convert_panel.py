@@ -71,6 +71,10 @@ class PanelView:
     result_title: str = ""
     result_text: str = ""
     summary: str = ""
+    # Advanced choices are in effect: Simple shows "Custom" with a way back.
+    custom: bool = False
+    # The queue is converting: this panel can add to it but not convert itself.
+    queue_busy: bool = False
 
     @property
     def locked(self) -> bool:
@@ -182,6 +186,8 @@ class ConvertPanel(QFrame):
     cancel_requested = Signal()
     show_in_folder_requested = Signal()
     done_requested = Signal()
+    reset_requested = Signal()
+    queue_requested = Signal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -196,13 +202,7 @@ class ConvertPanel(QFrame):
         self.mode = SegmentedControl(
             [
                 SegmentOption("simple", tr(s.MODE_SIMPLE), tooltip=tr(s.MODE_SIMPLE_TIP)),
-                SegmentOption(
-                    "advanced",
-                    tr(s.MODE_ADVANCED),
-                    tooltip=tr(s.MODE_ADVANCED_TIP),
-                    planned=True,
-                    planned_text=tr(s.BADGE_PLANNED),
-                ),
+                SegmentOption("advanced", tr(s.MODE_ADVANCED), tooltip=tr(s.MODE_ADVANCED_TIP)),
             ],
             accessible_name=tr(s.MODE_LABEL),
         )
@@ -232,9 +232,14 @@ class ConvertPanel(QFrame):
         )
         self.quality_help = label("", TextStyle.CAPTION, "secondary", wrap=True)
         self.lossless_note = Note(tr(s.QUALITY_LOSSLESS))
+        self.custom_note = Note(tr(s.CUSTOM_QUALITY), "Settings", "accent")
+        self.reset_button = Button(tr(s.CUSTOM_RESET), size=ButtonSize.SMALL, icon="RotateCcw")
+        self.reset_button.clicked.connect(self.reset_requested)
+        self.custom_note.add_widget(self.reset_button)
         quality_box.addWidget(self.quality)
         quality_box.addWidget(self.quality_help)
         quality_box.addWidget(self.lossless_note)
+        quality_box.addWidget(self.custom_note)
 
         folder_box, _ = _field(3, tr(s.FIELD_SAVE_TO))
         self.folder = FieldBox()
@@ -285,6 +290,11 @@ class ConvertPanel(QFrame):
             block=True,
         )
         self.convert.clicked.connect(self.convert_requested)
+        self.add_to_queue = Button(
+            tr(s.ADD_TO_QUEUE), ButtonKind.SUBTLE, icon="ListOrdered", block=True
+        )
+        self.add_to_queue.setToolTip(tr(s.ADD_TO_QUEUE_TOOLTIP))
+        self.add_to_queue.clicked.connect(self.queue_requested)
         idle = QWidget()
         idle_layout = QVBoxLayout(idle)
         idle_layout.setContentsMargins(0, 0, 0, 0)
@@ -300,6 +310,7 @@ class ConvertPanel(QFrame):
         idle_layout.addLayout(_pair(self.preview_short, self.preview_full))
         idle_layout.addWidget(self.preview_help)
         idle_layout.addWidget(self.convert)
+        idle_layout.addWidget(self.add_to_queue)
 
         self.progress = ProgressBlock()
         self.progress_text = label("", TextStyle.BODY_STRONG)
@@ -386,12 +397,16 @@ class ConvertPanel(QFrame):
         self.quality_help.setVisible(not view.lossless)
         self.quality_help.setText(vm.quality_help(view.quality))
         self.lossless_note.setVisible(view.lossless)
+        self.custom_note.setVisible(view.custom)
+        self.reset_button.setEnabled(not locked)
         self.folder.set_text(view.folder)
         self.folder_error.setVisible(bool(view.folder_error))
         self.output.apply_view(view)
         for widget in (self.mode, self.format, self.quality, self.browse):
             widget.setEnabled(not locked)
-        self.convert.setEnabled(not view.folder_error)
+        self.convert.setEnabled(not view.folder_error and not view.queue_busy)
+        self.convert.setToolTip(tr(s.CONVERT_BLOCKED_QUEUE) if view.queue_busy else "")
+        self.add_to_queue.setEnabled(not view.folder_error)
         self._render_footer(view)
 
     def _render_footer(self, view: PanelView) -> None:
