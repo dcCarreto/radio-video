@@ -270,6 +270,11 @@ A cumulative history of changes merged into `dev`, newest first.
 
 ### 2026-11-07
 
+- **#49 feat: convert many files with the queue**: the Queue tab converts files one after
+  another, each with its own format, quality and Advanced choices. Add files with Add Files…,
+  by dropping several files on the window, or with Add to Queue on the Convert tab; start,
+  stop, pause after the current file, reorder, retry and remove them, with live progress, a
+  notification when the queue finishes and a confirmation before quitting.
 - **#47 fix: retry the FFmpeg download when the daily build is being replaced**: the installer
   build reads the FFmpeg release again and retries when the daily rebuild briefly removes the
   file it was about to download, instead of failing.
