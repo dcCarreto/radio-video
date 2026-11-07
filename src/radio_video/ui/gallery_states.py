@@ -506,7 +506,7 @@ STATES = (
     GalleryState("queue-empty", "Queue: empty", _page(Page.QUEUE)),
     GalleryState("history", "History: saved, failed, canceled and moved", _history_demo),
     GalleryState("history-empty", "History: empty", _page(Page.HISTORY)),
-    GalleryState("settings", "Settings (planned)", _page(Page.SETTINGS)),
+    GalleryState("settings", "Settings", _page(Page.SETTINGS)),
 )
 
 

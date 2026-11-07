@@ -51,9 +51,15 @@ def parse_version(output: str) -> str | None:
 
 def ffmpeg_version(ffmpeg: Path, timeout: float = 15.0) -> str | None:
     """The FFmpeg release number, such as "7.1", or None if it cannot be read."""
+    return program_version(ffmpeg, "ffmpeg", timeout)
+
+
+def program_version(path: Path, program: str, timeout: float = 15.0) -> str | None:
+    """The release number ``path`` reports as ``program`` ("ffmpeg" or "ffprobe"), or None
+    when it doesn't run or isn't that program."""
     try:
         result = subprocess.run(
-            [str(ffmpeg), "-hide_banner", "-version"],
+            [str(path), "-hide_banner", "-version"],
             capture_output=True,
             timeout=timeout,
             check=False,
@@ -62,4 +68,10 @@ def ffmpeg_version(ffmpeg: Path, timeout: float = 15.0) -> str | None:
     except (OSError, subprocess.TimeoutExpired):
         logger.debug("Could not read the FFmpeg version", exc_info=True)
         return None
-    return parse_version(result.stdout.decode("utf-8", errors="replace"))
+    output = result.stdout.decode("utf-8", errors="replace").strip()
+    if program != "ffmpeg":
+        prefix = f"{program} version"
+        if not output.lower().startswith(prefix):
+            return None
+        output = "ffmpeg version" + output[len(prefix) :]
+    return parse_version(output)

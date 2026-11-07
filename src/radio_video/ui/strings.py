@@ -500,10 +500,6 @@ ACTION_SOFTWARE = QT_TRANSLATE_NOOP("RadioVideo", "Convert with Software")
 ACTION_TRY_AGAIN = QT_TRANSLATE_NOOP("RadioVideo", "Try Again")
 
 # Planned screens
-PLANNED_SETTINGS = QT_TRANSLATE_NOOP(
-    "RadioVideo",
-    "Only Performance works so far. The other settings show how they will work.",
-)
 
 # Preview window
 PREVIEW_WINDOW_TITLE = QT_TRANSLATE_NOOP("RadioVideo", "Converted preview: {name}")
@@ -851,7 +847,7 @@ HISTORY_CLEAR_TEXT = QT_TRANSLATE_NOOP(
 HISTORY_CLEAR_CONFIRM = QT_TRANSLATE_NOOP("RadioVideo", "Clear History")
 HISTORY_DETAILS_TITLE = QT_TRANSLATE_NOOP("RadioVideo", "{name} wasn’t converted")
 
-# Settings (planned)
+# Settings
 SETTINGS_TITLE = QT_TRANSLATE_NOOP("RadioVideo", "Settings")
 SETTINGS_TEXT = QT_TRANSLATE_NOOP("RadioVideo", "Changes are saved as you make them.")
 SETTINGS_ENGINE = QT_TRANSLATE_NOOP("RadioVideo", "Conversion engine")
@@ -859,7 +855,37 @@ SETTINGS_ENGINE_TEXT = QT_TRANSLATE_NOOP(
     "RadioVideo", "Radio/Video uses FFmpeg to read and convert files."
 )
 SETTINGS_WORKING = QT_TRANSLATE_NOOP("RadioVideo", "Working")
-SETTINGS_FOUND = QT_TRANSLATE_NOOP("RadioVideo", "FFmpeg {version}, found at {folder}")
+SETTINGS_FOUND = QT_TRANSLATE_NOOP("RadioVideo", "FFmpeg {version}, {source}")
+SETTINGS_SOURCE_CHOSEN = QT_TRANSLATE_NOOP("RadioVideo", "chosen here")
+SETTINGS_SOURCE_BUNDLED = QT_TRANSLATE_NOOP("RadioVideo", "included with Radio/Video")
+SETTINGS_SOURCE_ENV = QT_TRANSLATE_NOOP("RadioVideo", "set by {variable}")
+SETTINGS_SOURCE_PATH = QT_TRANSLATE_NOOP("RadioVideo", "found on the system PATH")
+SETTINGS_NOT_FOUND = QT_TRANSLATE_NOOP("RadioVideo", "Not found")
+SETTINGS_MISSING = QT_TRANSLATE_NOOP(
+    "RadioVideo", "FFmpeg wasn’t found. Choose ffmpeg.exe and ffprobe.exe, or install it."
+)
+SETTINGS_NOT_CHOSEN = QT_TRANSLATE_NOOP("RadioVideo", "Not found")
+SETTINGS_FIND_AUTOMATICALLY = QT_TRANSLATE_NOOP("RadioVideo", "Find Automatically")
+SETTINGS_RESTART = QT_TRANSLATE_NOOP(
+    "RadioVideo", "Restart Radio/Video to switch to the FFmpeg chosen here."
+)
+SETTINGS_RESTART_AUTOMATIC = QT_TRANSLATE_NOOP(
+    "RadioVideo", "Restart Radio/Video to go back to the FFmpeg it finds by itself."
+)
+SETTINGS_NOT_PROGRAM = QT_TRANSLATE_NOOP(
+    "RadioVideo",
+    "{name} didn’t answer as {program}. Choose {program}.exe from an FFmpeg build.",
+)
+SETTINGS_CHOOSE_PROGRAM = QT_TRANSLATE_NOOP("RadioVideo", "Choose {program}.exe")
+SETTINGS_PROGRAM_FILTER = QT_TRANSLATE_NOOP("RadioVideo", "Programs (*.exe)")
+SETTINGS_AUTOMATIC_FOLDER = QT_TRANSLATE_NOOP(
+    "RadioVideo", "Your Videos folder (Music for audio files)"
+)
+SETTINGS_TEMP_DEFAULT = QT_TRANSLATE_NOOP("RadioVideo", "{path} (the Windows temporary folder)")
+SETTINGS_USE_DEFAULT = QT_TRANSLATE_NOOP("RadioVideo", "Use Default")
+SETTINGS_FOLDER_NOT_WRITABLE = QT_TRANSLATE_NOOP(
+    "RadioVideo", "Radio/Video can’t write to {folder}. Choose another folder."
+)
 SETTINGS_DEFAULTS = QT_TRANSLATE_NOOP("RadioVideo", "Defaults")
 SETTINGS_DEFAULTS_TEXT = QT_TRANSLATE_NOOP("RadioVideo", "What a newly opened file starts with.")
 SETTINGS_SAVE_TO = QT_TRANSLATE_NOOP("RadioVideo", "Save converted files to")
@@ -887,7 +913,8 @@ SETTINGS_HARDWARE_NONE = QT_TRANSLATE_NOOP(
 SETTINGS_TEMP = QT_TRANSLATE_NOOP("RadioVideo", "Temporary files")
 SETTINGS_TEMP_TEXT = QT_TRANSLATE_NOOP(
     "RadioVideo",
-    "Previews and unfinished conversions are kept here and removed automatically.",
+    "Previews are made here and deleted when the preview window closes. Unfinished "
+    "conversions are written next to the final file instead.",
 )
 SETTINGS_LOCATION = QT_TRANSLATE_NOOP("RadioVideo", "Location")
 SETTINGS_LOCATION_HELP = QT_TRANSLATE_NOOP(
