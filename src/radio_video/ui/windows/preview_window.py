@@ -13,9 +13,9 @@ from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 
-from PySide6.QtCore import QRectF, QSize, Qt, QUrl, Signal, Slot
+from PySide6.QtCore import QLocale, QRectF, QSize, Qt, QUrl, Signal, Slot
 from PySide6.QtGui import QCloseEvent, QKeyEvent, QPaintEvent, QResizeEvent, QShowEvent
-from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
+from PySide6.QtMultimedia import QAudioOutput, QMediaMetaData, QMediaPlayer
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -136,6 +136,21 @@ def _value(title: str, value: QWidget) -> QVBoxLayout:
     return box
 
 
+def track_label(index: int, metadata: QMediaMetaData) -> str:
+    """ "Track 2 · English · English dub"; the number counts from 1."""
+    parts = [tr(s.PLAYER_TRACK).format(number=index + 1)]
+    language = metadata.value(QMediaMetaData.Key.Language)
+    if isinstance(language, QLocale.Language) and language not in (
+        QLocale.Language.AnyLanguage,
+        QLocale.Language.C,
+    ):
+        parts.append(QLocale.languageToString(language))
+    title = metadata.value(QMediaMetaData.Key.Title)
+    if isinstance(title, str) and title.strip():
+        parts.append(title.strip())
+    return " · ".join(parts)
+
+
 class PreviewWindow(QWidget):
     convert_requested = Signal()
     retry_requested = Signal(PreviewKind)
@@ -235,7 +250,13 @@ class PreviewWindow(QWidget):
             mute_tip=tr(s.PLAYER_MUTE),
             unmute_tip=tr(s.PLAYER_UNMUTE),
             volume_tip=tr(s.PLAYER_VOLUME),
+            audio_tip=tr(s.PLAYER_AUDIO_TRACK),
+            subtitles_tip=tr(s.PLAYER_SUBTITLES),
         )
+        self.player_bar.audio_track_chosen.connect(self.player.setActiveAudioTrack)
+        self.player_bar.subtitle_track_chosen.connect(self.player.setActiveSubtitleTrack)
+        self.player.tracksChanged.connect(self._on_tracks)
+        self.player.activeTracksChanged.connect(self._on_active_tracks)
         self.player_bar.play_toggled.connect(self.toggle_playback)
         self.player_bar.seek_requested.connect(self.player.setPosition)
         self.player_bar.mute_toggled.connect(self.toggle_mute)
@@ -443,6 +464,33 @@ class PreviewWindow(QWidget):
         if self._autoplay:
             self.player.play()
         return True
+
+    # Tracks
+    @Slot()
+    def _on_tracks(self) -> None:
+        audio = [track_label(i, m) for i, m in enumerate(self.player.audioTracks())]
+        subtitles = [track_label(i, m) for i, m in enumerate(self.player.subtitleTracks())]
+        has_picture = self.area.currentWidget() is self.canvas
+        self.player_bar.audio_menu.set_tracks(
+            list(enumerate(audio)), self.player.activeAudioTrack(), visible=len(audio) > 1
+        )
+        off = [(-1, tr(s.PLAYER_SUBTITLES_OFF))]
+        self.player_bar.subtitle_menu.set_tracks(
+            off + list(enumerate(subtitles)),
+            self.player.activeSubtitleTrack(),
+            visible=bool(subtitles) and has_picture,
+        )
+
+    @Slot()
+    def _on_active_tracks(self) -> None:
+        bar = self.player_bar
+        bar.audio_menu.set_active(
+            self.player.activeAudioTrack(), list(range(len(self.player.audioTracks())))
+        )
+        indices = [-1, *range(len(self.player.subtitleTracks()))]
+        bar.subtitle_menu.set_active(self.player.activeSubtitleTrack(), indices)
+        if self.player.activeSubtitleTrack() < 0:
+            self.canvas.set_subtitle("")
 
     @Slot(QMediaPlayer.Error, str)
     def _on_player_error(self, error: QMediaPlayer.Error, message: str) -> None:

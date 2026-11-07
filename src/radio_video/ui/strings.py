@@ -164,6 +164,10 @@ PLAYER_SEEK = QT_TRANSLATE_NOOP("RadioVideo", "Seek (Left/Right arrow)")
 PLAYER_MUTE = QT_TRANSLATE_NOOP("RadioVideo", "Mute (M)")
 PLAYER_UNMUTE = QT_TRANSLATE_NOOP("RadioVideo", "Unmute (M)")
 PLAYER_VOLUME = QT_TRANSLATE_NOOP("RadioVideo", "Volume")
+PLAYER_AUDIO_TRACK = QT_TRANSLATE_NOOP("RadioVideo", "Audio track")
+PLAYER_SUBTITLES = QT_TRANSLATE_NOOP("RadioVideo", "Subtitles")
+PLAYER_SUBTITLES_OFF = QT_TRANSLATE_NOOP("RadioVideo", "Off")
+PLAYER_TRACK = QT_TRANSLATE_NOOP("RadioVideo", "Track {number}")
 
 # Start screen
 START_HEADLINE = QT_TRANSLATE_NOOP(
