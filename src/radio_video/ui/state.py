@@ -58,6 +58,8 @@ class PreviewPhase(Enum):
 class PreviewKind(Enum):
     SAMPLE = "sample"
     FULL = "full"
+    # The opened file played as it is: nothing is converted, so it is ready at once.
+    ORIGINAL = "original"
 
 
 class Dialog(Enum):
@@ -328,7 +330,13 @@ class StateMachine:
 
     # Previews
     def preview_requested(self, kind: PreviewKind) -> bool:
-        if self._state.screen is not Screen.MAIN or self._state.locked:
+        if self._state.screen is not Screen.MAIN:
+            return False
+        if kind is PreviewKind.ORIGINAL:
+            # Playing the file only reads it, so it stays available while converting.
+            preview = PreviewState(kind, PreviewPhase.READY, Progress(1.0))
+            return self._set(dialog=Dialog.PREVIEW, preview=preview)
+        if self._state.locked:
             return False
         preview = PreviewState(kind, PreviewPhase.CREATING, settings=self._state.settings_key)
         return self._set(dialog=Dialog.PREVIEW, preview=preview)
@@ -366,7 +374,11 @@ class StateMachine:
     def preview_outdated(self) -> bool:
         """True when the settings changed after the preview was made."""
         preview = self._state.preview
-        return preview is not None and preview.settings != self._state.settings_key
+        return (
+            preview is not None
+            and preview.kind is not PreviewKind.ORIGINAL
+            and preview.settings != self._state.settings_key
+        )
 
     def preview_closed(self) -> bool:
         if self._state.dialog is not Dialog.PREVIEW:

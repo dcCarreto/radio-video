@@ -230,6 +230,26 @@ def stream_rows(media: MediaInfo) -> list[StreamRow]:
     return rows
 
 
+def original_contents(media: MediaInfo) -> list[tuple[str, str]]:
+    """What the opened file holds, for the original player's side panel."""
+    rows = [(tr(s.FACT_CONTAINER), media.format_long_name or media.format_name or NO_VALUE)]
+    if media.bit_rate:
+        rows.append((tr(s.FACT_BITRATE), format_bitrate(media.bit_rate)))
+    per_kind: dict[str, int] = {}
+    for stream in media.streams:
+        kind, _icon = stream_kind(stream)
+        per_kind[kind] = per_kind.get(kind, 0) + 1
+        codec = stream.codec_name or ""
+        # A cover's details already name its image format.
+        parts = [] if stream.is_attached_picture else [DECODER_NAMES.get(codec, codec.upper())]
+        language = language_name(stream.language)
+        for part in (stream_details(stream), language):
+            if part and part != NO_VALUE:
+                parts.append(part)
+        rows.append((f"{kind} {per_kind[kind]}", " · ".join(p for p in parts if p) or NO_VALUE))
+    return rows
+
+
 def _join(items: list[str]) -> str:
     if len(items) == 1:
         return tr(s.SUMMARY_SINGLE).format(only=items[0])
