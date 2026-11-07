@@ -241,6 +241,14 @@ The branch model, commit conventions and pull request process are described in
 
 A cumulative history of changes merged into `dev`, newest first.
 
+### 2026-11-07
+
+- **#43 feat: play the opened file as it is, without converting**: a Play button next to Open
+  (Ctrl+Shift+Space) opens the loaded file in the built-in player straight away, showing its size
+  and every track, with nothing converted or written. It stays available during a conversion,
+  offers a converted preview when the player can't open the file, and the original and converted
+  previews link to each other for a quick comparison.
+
 ### 2026-11-03
 
 - **#39 feat: encode video on the graphics card when available**: MP4 and MKV conversions
