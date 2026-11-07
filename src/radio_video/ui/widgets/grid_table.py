@@ -1,14 +1,15 @@
-"""Static table built from widgets, for rows that hold badges, buttons or progress bars.
+"""Table built from widgets, for rows that hold badges, buttons or progress bars.
 
-Used by the planned Queue, History and Tracks screens, which show example rows.
+Used by the Queue, History and Tracks screens. Clicking a row reports it; selected rows are
+tinted.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 
-from PySide6.QtCore import QRectF, Qt
-from PySide6.QtGui import QFont, QPaintEvent
+from PySide6.QtCore import QRectF, Qt, Signal
+from PySide6.QtGui import QFont, QMouseEvent, QPaintEvent
 from PySide6.QtWidgets import QGridLayout, QHBoxLayout, QLabel, QSizePolicy, QWidget
 
 from radio_video.ui import theme
@@ -34,6 +35,9 @@ def header_font() -> QFont:
 
 
 class GridTable(QWidget):
+    # The clicked row, counted from 0 below the header.
+    row_clicked = Signal(int)
+
     def __init__(
         self, columns: list[Column], *, on_surface: bool = False, parent: QWidget | None = None
     ) -> None:
@@ -80,22 +84,47 @@ class GridTable(QWidget):
         if selected:
             self._selected.add(self._rows)
 
+    def set_selected(self, rows: set[int]) -> None:
+        """Tint these rows, counted from 0 below the header."""
+        self._selected = {row + 1 for row in rows}
+        self.update()
+
+    def row_at(self, y: float) -> int | None:
+        for row in range(1, self._rows + 1):
+            span = self._row_span(row)
+            if span is not None and span[0] <= y <= span[1] + 1:
+                return row - 1
+        return None
+
+    def _row_span(self, row: int) -> tuple[int, int] | None:
+        top = bottom = None
+        for column in range(len(self.columns)):
+            item = self._grid.itemAtPosition(row, column)
+            cell = item.widget() if item is not None else None
+            if cell is None:
+                continue
+            geometry = cell.geometry()
+            top = geometry.top() if top is None else min(top, geometry.top())
+            bottom = geometry.bottom() if bottom is None else max(bottom, geometry.bottom())
+        if top is None or bottom is None:
+            return None
+        return top, bottom
+
+    def mousePressEvent(self, event: QMouseEvent) -> None:  # noqa: N802
+        row = self.row_at(event.position().y())
+        if row is not None and event.button() == Qt.MouseButton.LeftButton:
+            self.row_clicked.emit(row)
+        super().mousePressEvent(event)
+
     def paintEvent(self, event: QPaintEvent) -> None:  # noqa: N802
         painter = antialiased(self)
         p = theme.palette()
         width = float(self.width())
         for row in range(self._rows + 1):
-            top = bottom = None
-            for column in range(len(self.columns)):
-                item = self._grid.itemAtPosition(row, column)
-                cell = item.widget() if item is not None else None
-                if cell is None:
-                    continue
-                geometry = cell.geometry()
-                top = geometry.top() if top is None else min(top, geometry.top())
-                bottom = geometry.bottom() if bottom is None else max(bottom, geometry.bottom())
-            if top is None or bottom is None:
+            span = self._row_span(row)
+            if span is None:
                 continue
+            top, bottom = span
             if row == 0:
                 painter.fillRect(
                     QRectF(0, top, width, bottom - top + 1), p.surface if self._on_surface else p.bg
