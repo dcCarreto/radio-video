@@ -122,8 +122,17 @@ control over encoding parameters, tracks and filters.
   File moved when the output is no longer there), size and time taken. Saved files can be
   opened or shown in their folder; failures open the explanation and technical details.
   Clear History… asks first and never touches the converted files.
-- The Settings screen is still a preview under a "Planned" banner; only its hardware
-  acceleration switch acts.
+- Settings, saved as they change:
+  - Conversion engine: shows the FFmpeg in use and where it came from. Browse… chooses
+    ffmpeg.exe or ffprobe.exe (each is run first, and one that isn't FFmpeg is refused; the
+    other program in the same folder comes along). The choice applies at once when FFmpeg was
+    missing, otherwise from the next start; Find Automatically goes back. Check Again repeats
+    the graphics card check.
+  - Defaults for newly opened files: save to the same folder as the original or to a chosen
+    folder, the format for video files and for audio files, and the quality.
+  - Performance: hardware acceleration on or off, naming the detected graphics card.
+  - Temporary files: the folder previews are made in.
+  - Appearance: follow Windows, light or dark, applied at once.
 - Converted preview window:
   - **Preview 15 s** converts a 15-second sample, starting a third of the way into the file, with
     the exact settings. Files of 15 seconds or less are converted entirely. **Full Preview**
@@ -143,7 +152,8 @@ control over encoding parameters, tracks and filters.
 
 ## Planned Features
 
-- Settings: default folder, formats and quality, temporary files location and theme.
+- Code-signed installer.
+- Keeping the queue between sessions.
 
 ## Technology Stack
 

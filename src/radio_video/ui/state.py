@@ -235,7 +235,12 @@ class StateMachine:
         return self._set(analyzing=False)
 
     def file_opened(
-        self, path: Path, *, format_key: str | None = None, lossless: bool | None = None
+        self,
+        path: Path,
+        *,
+        format_key: str | None = None,
+        lossless: bool | None = None,
+        quality: Quality | None = None,
     ) -> bool:
         if self._state.converting:
             return False
@@ -256,6 +261,7 @@ class StateMachine:
             advanced=AdvancedChoices(),
             format_key=format_key or self._state.format_key,
             lossless=self._state.lossless if lossless is None else lossless,
+            quality=quality or self._state.quality,
         )
 
     # Navigation

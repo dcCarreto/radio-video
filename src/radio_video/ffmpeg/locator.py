@@ -40,6 +40,7 @@ def _find(
     env_var: str,
     search_dirs: Iterable[Path],
     environ: Mapping[str, str],
+    chosen: Path | None = None,
 ) -> Path:
     override = environ.get(env_var)
     if override:
@@ -47,6 +48,9 @@ def _find(
         if path.is_file():
             return path.resolve()
         raise FFmpegNotFoundError(program, env_var)
+    # Chosen in Settings; if it has since been moved, the usual places are searched.
+    if chosen is not None and chosen.is_file():
+        return chosen.resolve()
 
     name = _executable_name(program)
     for directory in search_dirs:
@@ -70,15 +74,17 @@ def bundled_dirs() -> tuple[Path, ...]:
 def locate_tools(
     search_dirs: Iterable[Path] | None = None,
     environ: Mapping[str, str] | None = None,
+    chosen: FFmpegTools | None = None,
 ) -> FFmpegTools:
     """Find the ffmpeg and ffprobe executables.
 
-    Lookup order: environment variable override, ``search_dirs`` (by default the FFmpeg bundled
-    with the installed application), then ``PATH``.
+    Lookup order: environment variable override, the files ``chosen`` in Settings,
+    ``search_dirs`` (by default the FFmpeg bundled with the installed application), then
+    ``PATH``.
     """
     env = os.environ if environ is None else environ
     dirs = tuple(bundled_dirs() if search_dirs is None else search_dirs)
     return FFmpegTools(
-        ffmpeg=_find("ffmpeg", FFMPEG_ENV, dirs, env),
-        ffprobe=_find("ffprobe", FFPROBE_ENV, dirs, env),
+        ffmpeg=_find("ffmpeg", FFMPEG_ENV, dirs, env, chosen.ffmpeg if chosen else None),
+        ffprobe=_find("ffprobe", FFPROBE_ENV, dirs, env, chosen.ffprobe if chosen else None),
     )

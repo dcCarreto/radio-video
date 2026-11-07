@@ -7,6 +7,7 @@ from radio_video.ffmpeg.locator import (
     FFMPEG_ENV,
     FFPROBE_ENV,
     FFmpegNotFoundError,
+    FFmpegTools,
     locate_tools,
 )
 
@@ -80,3 +81,24 @@ def test_no_bundled_folder_when_running_from_source() -> None:
     from radio_video.ffmpeg.locator import bundled_dirs
 
     assert getattr(sys, "frozen", False) or bundled_dirs() == ()
+
+
+def test_files_chosen_in_settings_come_before_the_bundled_ones(tmp_path: Path) -> None:
+    chosen_ffmpeg, chosen_ffprobe = _make_tools(tmp_path / "chosen")
+    _make_tools(tmp_path / "bundled")
+    tools = locate_tools(
+        search_dirs=[tmp_path / "bundled"],
+        environ={"PATH": ""},
+        chosen=FFmpegTools(chosen_ffmpeg, chosen_ffprobe),
+    )
+    assert tools == FFmpegTools(chosen_ffmpeg.resolve(), chosen_ffprobe.resolve())
+
+
+def test_moved_chosen_files_fall_back_to_the_usual_places(tmp_path: Path) -> None:
+    bundled_ffmpeg, _ = _make_tools(tmp_path / "bundled")
+    tools = locate_tools(
+        search_dirs=[tmp_path / "bundled"],
+        environ={"PATH": ""},
+        chosen=FFmpegTools(tmp_path / "gone" / "ffmpeg.exe", tmp_path / "gone" / "ffprobe.exe"),
+    )
+    assert tools.ffmpeg == bundled_ffmpeg.resolve()
