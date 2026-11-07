@@ -288,6 +288,9 @@ A cumulative history of changes merged into `dev`, newest first.
 
 ### 2026-11-07
 
+- **#57 feat: make every setting work**: Settings now chooses the FFmpeg to use (checked before
+  it is accepted), where converted files are saved, the format and quality new files start
+  with, the folder for previews and the theme. Changes are saved as they are made.
 - **#53 feat: choose the audio track and subtitles in the player**: files with several audio
   tracks or with subtitles get menus in the preview window's player to switch the audio track
   and turn subtitles on, with each track named by its language and title. Text subtitles are
