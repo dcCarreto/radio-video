@@ -1,5 +1,5 @@
-"""Settings: the conversion engine, defaults for new files, performance, temporary files and
-the theme. Changes are saved as they are made."""
+"""Settings: the conversion engine, defaults for new files, performance, temporary files,
+the theme and updates. Changes are saved as they are made."""
 
 from __future__ import annotations
 
@@ -32,6 +32,25 @@ ROWS_MAX_WIDTH = 620
 SAVE_SAME = "same"
 SAVE_FOLDER = "folder"
 THEMES = ("system", "light", "dark")
+# What the main update button does.
+UPDATE_DOWNLOAD = "download"
+UPDATE_RESTART = "restart"
+UPDATE_OPEN_PAGE = "open"
+
+
+@dataclass(frozen=True)
+class UpdateView:
+    automatic: bool
+    # The installed application can update itself; a copy run from source cannot.
+    installable: bool
+    badge: str
+    tone: BadgeTone
+    text: str
+    checking: bool
+    # UPDATE_DOWNLOAD, UPDATE_RESTART, UPDATE_OPEN_PAGE or "" for no button.
+    action: str
+    # A newer version is known, so its release notes can be opened.
+    notes: bool
 
 
 @dataclass(frozen=True)
@@ -57,6 +76,14 @@ class SettingsView:
     temp_location: str
     temp_is_default: bool
     theme: str
+    update: UpdateView
+
+
+UPDATE_BUTTONS: dict[str, tuple[object, IconName]] = {
+    UPDATE_DOWNLOAD: (s.UPDATES_DOWNLOAD, "ArrowDownToLine"),
+    UPDATE_RESTART: (s.UPDATES_RESTART, "RefreshCw"),
+    UPDATE_OPEN_PAGE: (s.UPDATES_OPEN_PAGE, "ExternalLink"),
+}
 
 
 class _Section(QWidget):
@@ -162,6 +189,11 @@ class SettingsPage(Page):
     temp_browse_requested = Signal()
     temp_reset_requested = Signal()
     theme_changed = Signal(str)
+    updates_automatic_changed = Signal(bool)
+    update_check_requested = Signal()
+    # UPDATE_DOWNLOAD, UPDATE_RESTART or UPDATE_OPEN_PAGE.
+    update_action_requested = Signal(str)
+    update_notes_requested = Signal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -254,6 +286,49 @@ class SettingsPage(Page):
         )
         self.theme.changed.connect(self.theme_changed)
 
+        # Updates
+        self.update_badge = Badge("", BadgeTone.NEUTRAL)
+        self.update_text = elided("")
+        update_status = QWidget()
+        update_status_layout = QHBoxLayout(update_status)
+        update_status_layout.setContentsMargins(0, 0, 0, 0)
+        update_status_layout.setSpacing(8)
+        update_status_layout.addWidget(self.update_badge)
+        update_status_layout.addWidget(self.update_text, 1)
+        automatic = QWidget()
+        automatic_layout = QHBoxLayout(automatic)
+        automatic_layout.setContentsMargins(0, 0, 0, 0)
+        automatic_layout.setSpacing(12)
+        self.automatic_switch = Switch()
+        self.automatic_switch.setAccessibleName(tr(s.UPDATES_AUTOMATIC))
+        self.automatic_switch.toggled.connect(self.updates_automatic_changed)
+        automatic_layout.addWidget(self.automatic_switch, 0, Qt.AlignmentFlag.AlignTop)
+        automatic_text = QVBoxLayout()
+        automatic_text.setSpacing(0)
+        automatic_text.addWidget(label(tr(s.UPDATES_AUTOMATIC), TextStyle.BODY_STRONG, wrap=True))
+        self.automatic_help = label(
+            tr(s.UPDATES_AUTOMATIC_HELP), TextStyle.CAPTION, "secondary", wrap=True
+        )
+        automatic_text.addWidget(self.automatic_help)
+        automatic_layout.addLayout(automatic_text, 1)
+        self.update_check = Button(tr(s.UPDATES_CHECK_NOW), icon="RefreshCw")
+        self.update_check.clicked.connect(self.update_check_requested)
+        self.update_action = Button(
+            tr(s.UPDATES_DOWNLOAD), ButtonKind.PRIMARY, icon="ArrowDownToLine"
+        )
+        self.update_action.clicked.connect(self._on_update_action)
+        self.update_notes = Button(tr(s.UPDATES_WHATS_NEW), ButtonKind.SUBTLE)
+        self.update_notes.clicked.connect(self.update_notes_requested)
+        update_buttons = QWidget()
+        update_buttons_layout = QHBoxLayout(update_buttons)
+        update_buttons_layout.setContentsMargins(0, 0, 0, 0)
+        update_buttons_layout.setSpacing(8)
+        update_buttons_layout.addWidget(self.update_action)
+        update_buttons_layout.addWidget(self.update_check)
+        update_buttons_layout.addWidget(self.update_notes)
+        update_buttons_layout.addStretch()
+        self._update_action = ""
+
         self.sections = [
             _Section(
                 tr(s.SETTINGS_ENGINE),
@@ -287,6 +362,7 @@ class SettingsPage(Page):
                 tr(s.SETTINGS_APPEARANCE_TEXT),
                 [_setting(tr(s.SETTINGS_THEME), self.theme)],
             ),
+            _Section(tr(s.UPDATES), tr(s.UPDATES_TEXT), [update_status, automatic, update_buttons]),
         ]
 
         content = QWidget()
@@ -304,7 +380,8 @@ class SettingsPage(Page):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
-        layout.addWidget(page_scroll(content), 1)
+        self.scroll_area = page_scroll(content)
+        layout.addWidget(self.scroll_area, 1)
 
     def show_view(self, view: SettingsView) -> None:
         self.view = view
@@ -355,6 +432,30 @@ class SettingsPage(Page):
         finally:
             for control in controls:
                 control.blockSignals(False)
+        self.show_update(view.update)
+
+    def show_update(self, view: UpdateView) -> None:
+        """Only the update rows, so download progress doesn't redo the whole page."""
+        self.update_badge.set_badge(view.badge, view.tone)
+        self.update_text.setText(view.text)
+        self.automatic_switch.blockSignals(True)
+        self.automatic_switch.setChecked(view.automatic)
+        self.automatic_switch.blockSignals(False)
+        self.automatic_help.setText(
+            tr(s.UPDATES_AUTOMATIC_HELP if view.installable else s.UPDATES_NOT_INSTALLED_HELP)
+        )
+        self.update_check.setEnabled(not view.checking)
+        self._update_action = view.action
+        if view.action in UPDATE_BUTTONS:
+            text, icon = UPDATE_BUTTONS[view.action]
+            self.update_action.setText(tr(text))
+            self.update_action.set_icon_name(icon)
+        self.update_action.setVisible(bool(view.action))
+        self.update_notes.setVisible(view.notes)
+
+    def _on_update_action(self) -> None:
+        if self._update_action:
+            self.update_action_requested.emit(self._update_action)
 
     def _on_save_mode(self, mode: str, on: bool) -> None:
         if on:

@@ -13,6 +13,7 @@ from radio_video.ffmpeg.capabilities import CapabilityError, ffmpeg_version, lis
 from radio_video.ffmpeg.hardware import detect_hardware
 from radio_video.ffmpeg.locator import FFmpegNotFoundError, FFmpegTools, locate_tools
 from radio_video.services.preview import purge_stale_previews
+from radio_video.services.updates import clear_downloads
 from radio_video.ui import theme
 from radio_video.ui.native.shell import set_app_user_model_id
 from radio_video.ui.widgets.focus_ring import FocusRing
@@ -22,6 +23,7 @@ from radio_video.ui.windows.main_window import (
     MainWindow,
     apply_theme_choice,
     chosen_tools,
+    default_update_folder,
     saved_theme,
 )
 
@@ -71,7 +73,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         removed += purge_stale_previews(temp_root=Path(chosen_temp))
     if removed:
         logger.info("Removed %d stale preview folders", removed)
+    # The installer of an update that has since been installed.
+    clear_downloads(default_update_folder())
 
     window = MainWindow(Engine(tools, encoders, version), detect_hardware=detect_hardware)
     window.show()
+    window.start_automatic_updates()
     return app.exec()

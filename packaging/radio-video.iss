@@ -65,3 +65,11 @@ Name: "{autodesktop}\{#AppFileName}"; Filename: "{app}\{#AppExe}"; AppUserModelI
 
 [Run]
 Filename: "{app}\{#AppExe}"; Description: "{cm:LaunchProgram,{#StringChange(AppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
+; Updates started from Radio/Video run silently with /RELAUNCH=1 to open it again afterwards.
+Filename: "{app}\{#AppExe}"; Flags: nowait runasoriginaluser skipifnotsilent; Check: RelaunchRequested
+
+[Code]
+function RelaunchRequested: Boolean;
+begin
+  Result := ExpandConstant('{param:RELAUNCH|0}') = '1';
+end;

@@ -35,6 +35,7 @@ ACTION_OPEN = QT_TRANSLATE_NOOP("RadioVideo", "Open File…")
 ACTION_EXIT = QT_TRANSLATE_NOOP("RadioVideo", "Exit")
 ACTION_ABOUT = QT_TRANSLATE_NOOP("RadioVideo", "About Radio/Video")
 ACTION_ABOUT_QT = QT_TRANSLATE_NOOP("RadioVideo", "About Qt")
+ACTION_CHECK_UPDATES = QT_TRANSLATE_NOOP("RadioVideo", "Check for Updates…")
 TAB_CONVERT = QT_TRANSLATE_NOOP("RadioVideo", "Convert")
 TAB_QUEUE = QT_TRANSLATE_NOOP("RadioVideo", "Queue")
 TAB_HISTORY = QT_TRANSLATE_NOOP("RadioVideo", "History")
@@ -926,3 +927,60 @@ SETTINGS_THEME = QT_TRANSLATE_NOOP("RadioVideo", "Theme")
 SETTINGS_THEME_SYSTEM = QT_TRANSLATE_NOOP("RadioVideo", "Use Windows setting")
 SETTINGS_THEME_LIGHT = QT_TRANSLATE_NOOP("RadioVideo", "Light")
 SETTINGS_THEME_DARK = QT_TRANSLATE_NOOP("RadioVideo", "Dark")
+
+# Updates
+UPDATES = QT_TRANSLATE_NOOP("RadioVideo", "Updates")
+UPDATES_TEXT = QT_TRANSLATE_NOOP(
+    "RadioVideo", "New versions come from the Radio/Video releases on GitHub."
+)
+UPDATES_AUTOMATIC = QT_TRANSLATE_NOOP("RadioVideo", "Update automatically")
+UPDATES_AUTOMATIC_HELP = QT_TRANSLATE_NOOP(
+    "RadioVideo",
+    "Checks for a new version when Radio/Video starts and downloads it in the background. "
+    "It’s installed when you close Radio/Video, or right away with Restart and Update.",
+)
+UPDATES_NOT_INSTALLED_HELP = QT_TRANSLATE_NOOP(
+    "RadioVideo",
+    "Checks for a new version when Radio/Video starts. This copy wasn’t set up with the "
+    "Windows installer, so new versions open on the download page.",
+)
+UPDATES_BADGE_VERSION = QT_TRANSLATE_NOOP("RadioVideo", "Version {version}")
+UPDATES_BADGE_CURRENT = QT_TRANSLATE_NOOP("RadioVideo", "Up to date")
+UPDATES_BADGE_AVAILABLE = QT_TRANSLATE_NOOP("RadioVideo", "New version")
+UPDATES_BADGE_DOWNLOADING = QT_TRANSLATE_NOOP("RadioVideo", "Downloading")
+UPDATES_BADGE_READY = QT_TRANSLATE_NOOP("RadioVideo", "Ready to install")
+UPDATES_BADGE_FAILED = QT_TRANSLATE_NOOP("RadioVideo", "Didn’t work")
+UPDATES_CHECKING = QT_TRANSLATE_NOOP("RadioVideo", "Checking for a new version…")
+UPDATES_CURRENT = QT_TRANSLATE_NOOP("RadioVideo", "Version {version} is the latest.")
+UPDATES_AVAILABLE = QT_TRANSLATE_NOOP(
+    "RadioVideo", "Version {version} is available. You have {current}."
+)
+UPDATES_DOWNLOADING = QT_TRANSLATE_NOOP("RadioVideo", "Downloading version {version}… {percent}%")
+UPDATES_READY = QT_TRANSLATE_NOOP(
+    "RadioVideo", "Version {version} installs when you close Radio/Video."
+)
+UPDATES_CHECK_FAILED = QT_TRANSLATE_NOOP("RadioVideo", "Couldn’t check for updates: {reason}")
+UPDATES_DOWNLOAD_FAILED = QT_TRANSLATE_NOOP(
+    "RadioVideo", "Version {version} couldn’t be downloaded: {reason}"
+)
+UPDATES_INSTALL_FAILED = QT_TRANSLATE_NOOP(
+    "RadioVideo", "The installer for version {version} didn’t start. Try the download page."
+)
+UPDATES_BUSY = QT_TRANSLATE_NOOP(
+    "RadioVideo", "Finish or stop the conversion, then restart to update."
+)
+UPDATES_CHECK_NOW = QT_TRANSLATE_NOOP("RadioVideo", "Check Now")
+UPDATES_DOWNLOAD = QT_TRANSLATE_NOOP("RadioVideo", "Download and Install")
+UPDATES_RESTART = QT_TRANSLATE_NOOP("RadioVideo", "Restart and Update")
+UPDATES_OPEN_PAGE = QT_TRANSLATE_NOOP("RadioVideo", "Open Download Page")
+UPDATES_WHATS_NEW = QT_TRANSLATE_NOOP("RadioVideo", "What’s New")
+UPDATES_LATER = QT_TRANSLATE_NOOP("RadioVideo", "Later")
+UPDATES_READY_TITLE = QT_TRANSLATE_NOOP("RadioVideo", "Radio/Video {version} is ready")
+UPDATES_READY_TEXT = QT_TRANSLATE_NOOP(
+    "RadioVideo",
+    "Restart now to finish updating. If you’d rather keep working, the update is installed "
+    "when you close Radio/Video.",
+)
+STATUS_UPDATE_READY = QT_TRANSLATE_NOOP(
+    "RadioVideo", "Version {version} installs when you close Radio/Video"
+)

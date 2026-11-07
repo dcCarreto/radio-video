@@ -11,6 +11,7 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from datetime import datetime
+from enum import Enum
 from functools import partial
 from pathlib import Path
 
@@ -22,6 +23,7 @@ from PySide6.QtCore import (
     QStandardPaths,
     Qt,
     QThreadPool,
+    QTimer,
     QUrl,
     Signal,
     SignalInstance,
@@ -52,6 +54,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from radio_video import __version__
 from radio_video.ffmpeg.capabilities import (
     CapabilityError,
     ffmpeg_version,
@@ -82,12 +85,14 @@ from radio_video.services.analysis import MediaAnalyzer
 from radio_video.services.conversion import ConversionError, ConversionRunner
 from radio_video.services.history import HistoryRecord, HistoryResult, HistoryStore
 from radio_video.services.queue import ConversionQueue, FileReader, QueueEntry, QueueStatus
+from radio_video.services.updates import Update, UpdateService, can_install, launch_installer
 from radio_video.ui import icons, theme
 from radio_video.ui import strings as s
 from radio_video.ui import viewmodel as vm
 from radio_video.ui.dialogs.about_dialog import AboutDialog
 from radio_video.ui.dialogs.failed_dialog import FailedDialog
 from radio_video.ui.dialogs.quit_dialog import QuitDialog
+from radio_video.ui.dialogs.update_dialog import UpdateDialog
 from radio_video.ui.errors_map import Failure, NextStep, describe
 from radio_video.ui.file_types import open_file_filter
 from radio_video.ui.native.dwm import style_title_bar
@@ -99,7 +104,15 @@ from radio_video.ui.pages.convert_panel import PanelView
 from radio_video.ui.pages.history_page import HistoryPage
 from radio_video.ui.pages.history_page import row_view as history_row
 from radio_video.ui.pages.queue_page import QueuePage, QueueView, counts_text, row_view
-from radio_video.ui.pages.settings_page import SAVE_SAME, SettingsPage, SettingsView
+from radio_video.ui.pages.settings_page import (
+    SAVE_SAME,
+    UPDATE_DOWNLOAD,
+    UPDATE_OPEN_PAGE,
+    UPDATE_RESTART,
+    SettingsPage,
+    SettingsView,
+    UpdateView,
+)
 from radio_video.ui.pages.start_view import make_drop_zone
 from radio_video.ui.state import (
     Dialog,
@@ -117,6 +130,7 @@ from radio_video.ui.state import (
 from radio_video.ui.strings import tr
 from radio_video.ui.theme.fonts import TextStyle
 from radio_video.ui.theme.tokens import Palette, Scheme
+from radio_video.ui.widgets.badge import BadgeTone
 from radio_video.ui.widgets.button import ButtonKind
 from radio_video.ui.widgets.drop_zone import DropState, check_drop, dropped_paths
 from radio_video.ui.widgets.format_combo import Choice
@@ -145,6 +159,9 @@ FFMPEG_KEY = "engine/ffmpeg"
 FFPROBE_KEY = "engine/ffprobe"
 TEMP_KEY = "files/temporaryFolder"
 THEME_KEY = "appearance/theme"
+UPDATES_AUTOMATIC_KEY = "updates/automatic"
+# The automatic check waits until the window has settled.
+UPDATE_CHECK_DELAY_MS = 4000
 DEFAULT_VIDEO_FORMAT = "mp4-h264"
 DEFAULT_AUDIO_FORMAT = "mp3"
 PAGE_INDEX = {Page.CONVERT: 0, Page.QUEUE: 1, Page.HISTORY: 2, Page.SETTINGS: 3}
@@ -166,6 +183,16 @@ class Engine:
 
 
 HardwareDetector = Callable[[Path, frozenset[str]], HardwareSupport | None]
+
+
+class UpdateStatus(Enum):
+    IDLE = "idle"
+    CHECKING = "checking"
+    CURRENT = "current"
+    AVAILABLE = "available"
+    DOWNLOADING = "downloading"
+    READY = "ready"
+    FAILED = "failed"
 
 
 class _HardwareTask(QRunnable):
@@ -257,11 +284,25 @@ class MainWindow(QMainWindow):
         locate: Callable[[], FFmpegTools] | None = None,
         detect_hardware: HardwareDetector | None = None,
         history_path: Path | None = None,
+        updates: UpdateService | None = None,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self.engine = engine
         self.settings = settings or QSettings()
+        self.updates = updates or UpdateService(default_update_folder(), self)
+        self.update_status = UpdateStatus.IDLE
+        self.available_update: Update | None = None
+        self.update_installer: Path | None = None
+        self._update_error = ""
+        self._update_received = 0
+        self._install_when_ready = False
+        self._installer_launched = False
+        self.update_dialog: UpdateDialog | None = None
+        # Only the installed application can run the installer; tests replace these.
+        self.installable = can_install()
+        self.launch_installer: Callable[[Path, bool], bool] = launch_installer
+        self.open_url: Callable[[str], object] = lambda url: QDesktopServices.openUrl(QUrl(url))
         # Finds FFmpeg again for Check Again, including the files chosen in Settings.
         self._locate = locate or (lambda: locate_tools(chosen=chosen_tools(self.settings)))
         self._engine_warning = ""
@@ -305,6 +346,11 @@ class MainWindow(QMainWindow):
         self.notifier.activated.connect(self._bring_to_front)
         self._hardware_found.connect(self._on_hardware_found)
         self._start_hardware_detection()
+        self.updates.checked.connect(self._on_update_checked)
+        self.updates.check_failed.connect(self._on_update_check_failed)
+        self.updates.progressed.connect(self._on_update_progress)
+        self.updates.downloaded.connect(self._on_update_downloaded)
+        self.updates.download_failed.connect(self._on_update_download_failed)
         # The switches and choices show the saved values before the page is first opened.
         self.settings_page.show_view(self.settings_view())
 
@@ -409,6 +455,10 @@ class MainWindow(QMainWindow):
         page_s.temp_browse_requested.connect(self.choose_temp_folder)
         page_s.temp_reset_requested.connect(lambda: self._save_setting(TEMP_KEY, None))
         page_s.theme_changed.connect(self._on_theme_choice)
+        page_s.updates_automatic_changed.connect(self._on_updates_automatic)
+        page_s.update_check_requested.connect(self.check_for_updates)
+        page_s.update_action_requested.connect(self._on_update_action)
+        page_s.update_notes_requested.connect(self._open_release_notes)
         for page_widget in (self.queue_page, self.history_page, self.settings_page):
             self.pages.addWidget(page_widget)
 
@@ -442,12 +492,15 @@ class MainWindow(QMainWindow):
         self.about_action.triggered.connect(self.machine.show_about)
         self.about_qt_action = QAction(tr(s.ACTION_ABOUT_QT), self)
         self.about_qt_action.triggered.connect(QApplication.aboutQt)
+        self.update_action = QAction(tr(s.ACTION_CHECK_UPDATES), self)
+        self.update_action.triggered.connect(self._on_check_updates_menu)
 
         file_menu = self.menuBar().addMenu(tr(s.MENU_FILE))
         file_menu.addAction(self.open_action)
         file_menu.addSeparator()
         file_menu.addAction(self.exit_action)
         help_menu = self.menuBar().addMenu(tr(s.MENU_HELP))
+        help_menu.addAction(self.update_action)
         help_menu.addAction(self.about_action)
         help_menu.addAction(self.about_qt_action)
 
@@ -616,6 +669,9 @@ class MainWindow(QMainWindow):
         elif state.previewing and state.preview is not None:
             percent = vm.percent(state.preview.progress.fraction)
             self.status_item.show_status(tr(s.STATUS_PREVIEWING).format(percent=percent), busy=True)
+        elif self.update_status is UpdateStatus.READY and self.available_update is not None:
+            text = tr(s.STATUS_UPDATE_READY).format(version=self.available_update.version)
+            self.status_item.show_status(text, busy=False)
         else:
             text = tr(s.STATUS_ENGINE_READY).format(version=self.engine.version or "")
             self.status_item.show_status(text.rstrip(), busy=False)
@@ -1369,6 +1425,7 @@ class MainWindow(QMainWindow):
             else tr(s.SETTINGS_TEMP_DEFAULT).format(path=tempfile.gettempdir()),
             temp_is_default=temp is None,
             theme=scheme.value if scheme is not None else "system",
+            update=self.update_view(),
         )
 
     def choose_engine_program(self, program: str) -> None:
@@ -1448,6 +1505,202 @@ class MainWindow(QMainWindow):
     def _on_theme_choice(self, value: str) -> None:
         apply_theme_choice(value)
         self._save_setting(THEME_KEY, value)
+
+    # Updates
+    @property
+    def updates_automatic(self) -> bool:
+        return bool(self.settings.value(UPDATES_AUTOMATIC_KEY, True, type=bool))
+
+    def start_automatic_updates(self, delay_ms: int = UPDATE_CHECK_DELAY_MS) -> None:
+        """Called once at startup: checks shortly after if updates are automatic."""
+        if self.updates_automatic:
+            QTimer.singleShot(delay_ms, self, lambda: self.check_for_updates(automatic=True))
+
+    def check_for_updates(self, automatic: bool = False) -> None:
+        if automatic and not self.updates_automatic:
+            return
+        if self.update_status in (
+            UpdateStatus.CHECKING,
+            UpdateStatus.DOWNLOADING,
+            UpdateStatus.READY,
+        ):
+            return
+        if self.updates.check():
+            self.update_status = UpdateStatus.CHECKING
+            self._update_error = ""
+            self._render_update()
+
+    @Slot(object)
+    def _on_update_checked(self, update: Update | None) -> None:
+        self.available_update = update
+        if update is None:
+            self.update_status = UpdateStatus.CURRENT
+        else:
+            logger.info("Version %s is available", update.version)
+            self.update_status = UpdateStatus.AVAILABLE
+            if self.installable and self.updates_automatic:
+                self.download_update()
+                return
+        self._render_update()
+
+    @Slot(str)
+    def _on_update_check_failed(self, reason: str) -> None:
+        logger.warning("Checking for updates failed: %s", reason)
+        self.update_status = UpdateStatus.FAILED
+        self.available_update = None
+        self._update_error = tr(s.UPDATES_CHECK_FAILED).format(reason=reason)
+        self._render_update()
+
+    def download_update(self, install_when_ready: bool = False) -> None:
+        update = self.available_update
+        if update is None or not self.installable:
+            return
+        if self.updates.download(update):
+            self._install_when_ready = install_when_ready
+            self.update_status = UpdateStatus.DOWNLOADING
+            self._update_error = ""
+            self._update_received = 0
+            self._render_update()
+
+    @Slot(int, int)
+    def _on_update_progress(self, received: int, _total: int) -> None:
+        self._update_received = received
+        self.settings_page.show_update(self.update_view())
+
+    @Slot(object)
+    def _on_update_downloaded(self, installer: Path) -> None:
+        self.update_installer = installer
+        self.update_status = UpdateStatus.READY
+        self._render_update()
+        if self._install_when_ready:
+            self.install_update()
+        else:
+            self._offer_update()
+
+    @Slot(str)
+    def _on_update_download_failed(self, reason: str) -> None:
+        logger.warning("Downloading the update failed: %s", reason)
+        self.update_status = UpdateStatus.FAILED
+        version = self.available_update.version if self.available_update else ""
+        self._update_error = tr(s.UPDATES_DOWNLOAD_FAILED).format(version=version, reason=reason)
+        self._render_update()
+
+    def _busy(self) -> bool:
+        state = self.machine.state
+        return (
+            state.converting or state.previewing or (self.queue is not None and self.queue.running)
+        )
+
+    def _offer_update(self) -> None:
+        """Ask once whether to restart now; never over a conversion or another dialog."""
+        update = self.available_update
+        if update is None or self._busy() or self._dialog is not None or not self.isVisible():
+            return
+        dialog = UpdateDialog(update.version, self)
+        self.update_dialog = dialog
+        dialog.finished.connect(self._on_update_dialog_finished)
+        dialog.open()
+
+    @Slot(int)
+    def _on_update_dialog_finished(self, result: int) -> None:
+        self.update_dialog = None
+        if result == QDialog.DialogCode.Accepted.value:
+            self.install_update()
+
+    def install_update(self) -> bool:
+        """Start the installer, which opens Radio/Video again, and close."""
+        installer = self.update_installer
+        update = self.available_update
+        if installer is None or update is None or not installer.is_file():
+            return False
+        if self._busy():
+            self.statusBar().showMessage(tr(s.UPDATES_BUSY), STATUS_MESSAGE_MS)
+            return False
+        if not self.launch_installer(installer, True):
+            self.statusBar().showMessage(
+                tr(s.UPDATES_INSTALL_FAILED).format(version=update.version), STATUS_MESSAGE_MS
+            )
+            return False
+        logger.info("Installing version %s", update.version)
+        self._installer_launched = True
+        self._quitting = True
+        self.close()
+        return True
+
+    @Slot(str)
+    def _on_update_action(self, action: str) -> None:
+        if action == UPDATE_DOWNLOAD:
+            self.download_update(install_when_ready=True)
+        elif action == UPDATE_RESTART:
+            self.install_update()
+        elif action == UPDATE_OPEN_PAGE:
+            self._open_release_notes()
+
+    def _open_release_notes(self) -> None:
+        if self.available_update is not None:
+            self.open_url(self.available_update.page_url)
+
+    @Slot(bool)
+    def _on_updates_automatic(self, enabled: bool) -> None:
+        self.settings.setValue(UPDATES_AUTOMATIC_KEY, enabled)
+        if not enabled:
+            self._render_update()
+        elif self.update_status is UpdateStatus.AVAILABLE:
+            self.download_update()
+        elif self.update_status in (UpdateStatus.IDLE, UpdateStatus.FAILED):
+            self.check_for_updates(automatic=True)
+        else:
+            self._render_update()
+
+    def _on_check_updates_menu(self) -> None:
+        self.tabs.set_current(Page.SETTINGS.value)
+        self.check_for_updates()
+
+    def _render_update(self) -> None:
+        self.settings_page.show_update(self.update_view())
+        self._render_status(self.machine.state)
+
+    def update_view(self) -> UpdateView:
+        status, update = self.update_status, self.available_update
+        new = update.version if update is not None else ""
+        notes = update is not None
+        action = ""
+        if status is UpdateStatus.CURRENT:
+            badge, tone = tr(s.UPDATES_BADGE_CURRENT), BadgeTone.SUCCESS
+            text = tr(s.UPDATES_CURRENT).format(version=__version__)
+        elif status is UpdateStatus.AVAILABLE:
+            badge, tone = tr(s.UPDATES_BADGE_AVAILABLE), BadgeTone.ACCENT
+            text = tr(s.UPDATES_AVAILABLE).format(version=new, current=__version__)
+            action = UPDATE_DOWNLOAD if self.installable else UPDATE_OPEN_PAGE
+            notes = self.installable
+        elif status is UpdateStatus.DOWNLOADING:
+            badge, tone = tr(s.UPDATES_BADGE_DOWNLOADING), BadgeTone.ACCENT
+            size = update.size if update is not None else 0
+            percent = vm.percent(self._update_received / size) if size else 0
+            text = tr(s.UPDATES_DOWNLOADING).format(version=new, percent=percent)
+        elif status is UpdateStatus.READY:
+            badge, tone = tr(s.UPDATES_BADGE_READY), BadgeTone.SUCCESS
+            text = tr(s.UPDATES_READY).format(version=new)
+            action = UPDATE_RESTART
+        elif status is UpdateStatus.FAILED:
+            badge, tone = tr(s.UPDATES_BADGE_FAILED), BadgeTone.WARNING
+            text = self._update_error
+            if update is not None:
+                action = UPDATE_DOWNLOAD if self.installable else UPDATE_OPEN_PAGE
+        else:
+            badge, tone = tr(s.UPDATES_BADGE_VERSION).format(version=__version__), BadgeTone.NEUTRAL
+            text = tr(s.UPDATES_CHECKING) if status is UpdateStatus.CHECKING else ""
+        return UpdateView(
+            automatic=self.updates_automatic,
+            installable=self.installable,
+            badge=badge,
+            tone=tone,
+            text=text,
+            checking=status
+            in (UpdateStatus.CHECKING, UpdateStatus.DOWNLOADING, UpdateStatus.READY),
+            action=action,
+            notes=notes,
+        )
 
     # Engine
     @Slot()
@@ -1585,6 +1838,18 @@ class MainWindow(QMainWindow):
             self.runner.cancel()
             self.runner.wait()
         self.taskbar.close()
+        self.updates.cancel()
+        if self.update_dialog is not None:
+            self.update_dialog.done(QDialog.DialogCode.Rejected)
+        installer = self.update_installer
+        if (
+            self.update_status is UpdateStatus.READY
+            and not self._installer_launched
+            and installer is not None
+            and installer.is_file()
+        ):
+            # Downloaded but not installed yet: install on the way out, without reopening.
+            self._installer_launched = self.launch_installer(installer, False)
         super().closeEvent(event)
 
     def resizeEvent(self, event: QResizeEvent) -> None:  # noqa: N802
@@ -1644,6 +1909,11 @@ def saved_theme(settings: QSettings) -> str:
 
 def apply_theme_choice(value: str) -> None:
     theme.current().set_override(None if value == "system" else Scheme(value))
+
+
+def default_update_folder() -> Path:
+    folder = QStandardPaths.writableLocation(QStandardPaths.StandardLocation.CacheLocation)
+    return Path(folder) / "updates"
 
 
 def default_history_path() -> Path:
