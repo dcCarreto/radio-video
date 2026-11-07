@@ -1,10 +1,9 @@
-"""History and Settings, planned: they show how the features will work, with example
+"""Settings, planned: they show how the features will work, with example
 rows, under a banner that says they aren't built yet. Nothing on them acts."""
 
 from __future__ import annotations
 
 import tempfile
-from dataclasses import dataclass
 from pathlib import Path
 
 from PySide6.QtCore import QRectF, Qt, Signal
@@ -23,18 +22,15 @@ from radio_video.ui import viewmodel as vm
 from radio_video.ui.icons import IconName
 from radio_video.ui.pages.page_parts import (
     Page,
-    PageHeader,
     elided,
     page_scroll,
-    status_badge,
 )
 from radio_video.ui.strings import tr
 from radio_video.ui.theme.fonts import TextStyle
 from radio_video.ui.widgets.badge import Badge, BadgeTone
-from radio_video.ui.widgets.button import Button, ButtonKind, ButtonSize
+from radio_video.ui.widgets.button import Button
 from radio_video.ui.widgets.checks import RadioButton, Switch
 from radio_video.ui.widgets.frames import ComboFace, FieldBox, PlannedBanner
-from radio_video.ui.widgets.grid_table import Column, GridTable
 from radio_video.ui.widgets.labels import label
 from radio_video.ui.widgets.painting import antialiased, follow_theme
 from radio_video.ui.widgets.segmented import SegmentedControl, SegmentOption
@@ -45,165 +41,6 @@ ROWS_MAX_WIDTH = 620
 
 
 # Queue
-
-# History
-
-
-@dataclass(frozen=True)
-class HistoryRow:
-    when: str
-    source: str
-    output: str
-    target: str
-    result: str
-    size: str
-    took: str
-
-
-EXAMPLE_HISTORY = (
-    HistoryRow(
-        "Today, 14:32",
-        "Interview – Lisbon Studio Session (Final Cut, 2026-03-14).mkv",
-        "Interview – Lisbon Studio Session (Final Cut, 2026-03-14) (1).mp4",
-        "MP4 (H.264 + AAC) · Balanced",
-        "saved",
-        "22.4 MB",
-        "0:43",
-    ),
-    HistoryRow(
-        "Today, 11:05",
-        "Podcast ep. 40 – raw.wav",
-        "Podcast ep. 40 – raw.mp3",
-        "MP3 · Balanced",
-        "saved",
-        "38.7 MB",
-        "0:12",
-    ),
-    HistoryRow(
-        "Yesterday, 18:20",
-        "B-roll_harbour_0412.mp4",
-        "",
-        "WebM (VP9 + Opus) · Balanced",
-        "failed",
-        "—",
-        "1:02",
-    ),
-    HistoryRow(
-        "Yesterday, 09:47", "clip.mov", "clip.mp3", "MP3 · Balanced", "saved", "118.9 KB", "0:01"
-    ),
-    HistoryRow(
-        "3 Oct 2026, 16:10",
-        "Old family tape (VHS transfer).avi",
-        "",
-        "MKV (H.264 + AAC) · High",
-        "canceled",
-        "—",
-        "0:54",
-    ),
-    HistoryRow(
-        "1 Oct 2026, 10:02",
-        "Rehearsal day 1.mov",
-        "Rehearsal day 1.mp4",
-        "MP4 (H.265 + AAC) · Small file",
-        "moved",
-        "1.2 GB",
-        "6:18",
-    ),
-)
-
-RESULT_BADGES: dict[str, tuple[str, object | None]] = {
-    "saved": ("done", s.HISTORY_SAVED),
-    "failed": ("failed", None),
-    "canceled": ("canceled", None),
-    "moved": ("", s.HISTORY_MOVED),
-}
-
-
-class HistoryPage(Page):
-    def __init__(self, parent: QWidget | None = None) -> None:
-        super().__init__(parent)
-        clear = Button(tr(s.HISTORY_CLEAR), ButtonKind.SUBTLE, icon="Trash2")
-        self.table_box = QVBoxLayout()
-        self.table_box.setContentsMargins(24, 4, 24, 16)
-        content = QWidget()
-        content_layout = QVBoxLayout(content)
-        content_layout.setContentsMargins(0, 0, 0, 0)
-        content_layout.addLayout(self.table_box)
-        content_layout.addStretch()
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
-        layout.addWidget(PlannedBanner(tr(s.PLANNED_HISTORY), tr(s.BADGE_PLANNED)))
-        layout.addWidget(PageHeader(tr(s.HISTORY_TITLE), tr(s.HISTORY_TEXT), [clear]))
-        layout.addWidget(page_scroll(content), 1)
-        self.table: GridTable | None = None
-        self.set_compact(False)
-
-    def _result(self, row: HistoryRow) -> Badge:
-        status, text = RESULT_BADGES[row.result]
-        if row.result == "moved":
-            return Badge(tr(s.HISTORY_MOVED), BadgeTone.WARNING, "TriangleAlert")
-        return status_badge(status, text)
-
-    def _actions(self, row: HistoryRow) -> QWidget:
-        if row.result == "moved":
-            return label(tr(s.HISTORY_GONE), TextStyle.CAPTION, "secondary", wrap=True)
-        box = QWidget()
-        layout = QHBoxLayout(box)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(4)
-        if row.result == "saved":
-            actions: tuple[tuple[object, IconName], ...] = (
-                (s.HISTORY_OPEN, "Play"),
-                (s.SHOW_IN_FOLDER, "FolderOpen"),
-            )
-            for text, icon in actions:
-                layout.addWidget(
-                    Button(tr(text), ButtonKind.SUBTLE, icon=icon, size=ButtonSize.SMALL)
-                )
-        else:
-            layout.addWidget(
-                Button(
-                    tr(s.HISTORY_DETAILS), ButtonKind.SUBTLE, icon="FileText", size=ButtonSize.SMALL
-                )
-            )
-        layout.addStretch()
-        return box
-
-    def set_compact(self, compact: bool) -> None:
-        if self.table is not None:
-            self.table_box.removeWidget(self.table)
-            self.table.deleteLater()
-        titles = [tr(t) for t in s.HISTORY_COLUMNS]
-        columns = [Column(titles[0], 110 if compact else 140), Column(titles[1])]
-        if not compact:
-            columns.append(Column(titles[2], 230))
-        columns += [Column(titles[3], 120), Column(titles[4], 84)]
-        if not compact:
-            columns.append(Column(titles[5], 72))
-        columns.append(Column(titles[6], 210 if compact else 240))
-        table = GridTable(columns)
-        for row in EXAMPLE_HISTORY:
-            file_cell = QWidget()
-            file_layout = QVBoxLayout(file_cell)
-            file_layout.setContentsMargins(0, 0, 0, 0)
-            file_layout.setSpacing(0)
-            file_layout.addWidget(elided(row.source, TextStyle.BODY_STRONG))
-            second = f"→ {row.output}" if row.output else tr(s.HISTORY_NO_FILE)
-            if compact:
-                second += f" · {row.target}"
-            file_layout.addWidget(elided(second, TextStyle.CAPTION, "secondary"))
-            cells: list[QWidget] = [label(row.when, tone="secondary"), file_cell]
-            if not compact:
-                cells.append(elided(row.target))
-            cells += [self._result(row), label(row.size)]
-            if not compact:
-                cells.append(label(row.took))
-            cells.append(self._actions(row))
-            table.add_row(cells)
-        self.table = table
-        self.table_box.addWidget(table)
-
 
 # Settings
 

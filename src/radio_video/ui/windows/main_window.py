@@ -9,6 +9,7 @@ import sys
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field, replace
+from datetime import datetime
 from functools import partial
 from pathlib import Path
 
@@ -61,7 +62,8 @@ from radio_video.models.media import MediaInfo
 from radio_video.models.presets import OutputFormat, available_formats, format_by_key
 from radio_video.services.analysis import MediaAnalyzer
 from radio_video.services.conversion import ConversionError, ConversionRunner
-from radio_video.services.queue import ConversionQueue, FileReader, QueueEntry
+from radio_video.services.history import HistoryRecord, HistoryResult, HistoryStore
+from radio_video.services.queue import ConversionQueue, FileReader, QueueEntry, QueueStatus
 from radio_video.ui import icons, theme
 from radio_video.ui import strings as s
 from radio_video.ui import viewmodel as vm
@@ -76,7 +78,9 @@ from radio_video.ui.native.taskbar import TaskbarProgress, TaskbarState
 from radio_video.ui.pages.advanced_panel import AdvancedView, output_summary
 from radio_video.ui.pages.convert_page import ConvertPage
 from radio_video.ui.pages.convert_panel import PanelView
-from radio_video.ui.pages.planned_pages import HistoryPage, SettingsPage
+from radio_video.ui.pages.history_page import HistoryPage
+from radio_video.ui.pages.history_page import row_view as history_row
+from radio_video.ui.pages.planned_pages import SettingsPage
 from radio_video.ui.pages.queue_page import QueuePage, QueueView, counts_text, row_view
 from radio_video.ui.pages.start_view import make_drop_zone
 from radio_video.ui.state import (
@@ -95,6 +99,7 @@ from radio_video.ui.state import (
 from radio_video.ui.strings import tr
 from radio_video.ui.theme.fonts import TextStyle
 from radio_video.ui.theme.tokens import Palette
+from radio_video.ui.widgets.button import ButtonKind
 from radio_video.ui.widgets.drop_zone import DropState, check_drop, dropped_paths
 from radio_video.ui.widgets.labels import label
 from radio_video.ui.widgets.painting import antialiased, fill_rounded, follow_theme
@@ -169,6 +174,10 @@ class _Session:
     folder: Path | None = None
     started_at: float = 0.0
     destination: Path | None = None
+    # What the running conversion was started with, for the history.
+    format_key: str = ""
+    quality: str | None = None
+    custom: bool = False
     existing: set[Path] = field(default_factory=set)
 
 
@@ -218,6 +227,7 @@ class MainWindow(QMainWindow):
         settings: QSettings | None = None,
         locate: Callable[[], FFmpegTools] = locate_tools,
         detect_hardware: HardwareDetector | None = None,
+        history_path: Path | None = None,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
@@ -230,6 +240,7 @@ class MainWindow(QMainWindow):
         self._software_next = False
         self.session = _Session()
         self.machine = StateMachine()
+        self.history = HistoryStore(history_path or default_history_path())
         self._dialog: QDialog | None = None
         self._dialog_kind: Dialog | None = None
         self.preview_window: PreviewWindow | None = None
@@ -293,6 +304,7 @@ class MainWindow(QMainWindow):
         self.queue.changed.connect(self._render_queue)
         self.queue.progressed.connect(self._on_queue_progress)
         self.queue.run_finished.connect(self._on_queue_finished)
+        self.queue.entry_finished.connect(self._record_queue_entry)
         self.reader = FileReader(tools.ffprobe, parent=self)
         self.reader.read.connect(self._on_queue_file_read)
 
@@ -301,7 +313,7 @@ class MainWindow(QMainWindow):
             [
                 TabSpec("main", tr(s.TAB_CONVERT), "ArrowRightLeft"),
                 TabSpec("queue", tr(s.TAB_QUEUE), "ListOrdered"),
-                TabSpec("history", tr(s.TAB_HISTORY), "History", True, tr(s.BADGE_PLANNED)),
+                TabSpec("history", tr(s.TAB_HISTORY), "History"),
                 TabSpec(
                     "settings", tr(s.TAB_SETTINGS), "Settings", True, tr(s.BADGE_PLANNED), True
                 ),
@@ -346,12 +358,16 @@ class MainWindow(QMainWindow):
         self.queue_page.remove_requested.connect(self._on_queue_remove)
         self.queue_page.clear_requested.connect(self._on_queue_clear)
         self.history_page = HistoryPage()
+        self.history_page.open_requested.connect(self._open_history_output)
+        self.history_page.show_requested.connect(self._show_history_output)
+        self.history_page.details_requested.connect(self._show_history_details)
+        self.history_page.clear_requested.connect(self.clear_history)
         self.settings_page = SettingsPage(
             self.engine.tools, self.engine.version, hardware_enabled=self.hardware_enabled
         )
         self.settings_page.hardware_changed.connect(self._on_hardware_changed)
-        for planned in (self.queue_page, self.history_page, self.settings_page):
-            self.pages.addWidget(planned)
+        for page_widget in (self.queue_page, self.history_page, self.settings_page):
+            self.pages.addWidget(page_widget)
 
         central = QWidget()
         layout = QVBoxLayout(central)
@@ -415,6 +431,8 @@ class MainWindow(QMainWindow):
         self.tabs.set_current(state.page.value)
         self.tabs.blockSignals(False)
         self.pages.setCurrentIndex(PAGE_INDEX[state.page])
+        if state.page is Page.HISTORY:
+            self._render_history()
 
         page = self.convert_page
         if state.screen is Screen.MISSING:
@@ -809,6 +827,9 @@ class MainWindow(QMainWindow):
             return
         self.session.destination = name.path
         self.session.started_at = time.monotonic()
+        self.session.format_key = fmt.key
+        self.session.quality = None if fmt.lossless else state.quality.value
+        self.session.custom = not state.advanced.is_default
         try:
             recipe = self.recipe(state, media)
             job = ConversionJob(
@@ -850,17 +871,20 @@ class MainWindow(QMainWindow):
         size = output.stat().st_size if output.exists() else None
         took = time.monotonic() - self.session.started_at
         self.machine.conversion_succeeded(output, size, took)
+        self._record(HistoryResult.SAVED, output=output, size=size, took=took)
         self.notifier.conversion_finished(output.name)
         if self._quitting:
             self.close()
 
     @Slot(str)
     def _on_conversion_failed(self, message: str) -> None:
+        self._record(HistoryResult.FAILED, error=message)
         self.machine.conversion_failed(message)
         self.notifier.conversion_failed()
 
     @Slot()
     def _on_conversion_canceled(self) -> None:
+        self._record(HistoryResult.CANCELED, fraction=self.machine.state.progress.fraction)
         self.machine.conversion_canceled()
         self.notifier.conversion_stopped()
 
@@ -869,10 +893,7 @@ class MainWindow(QMainWindow):
         output = self.machine.state.output
         if output is None:
             return
-        if sys.platform == "win32" and output.exists():
-            QProcess.startDetached("explorer", [f"/select,{output}"])
-        else:
-            QDesktopServices.openUrl(QUrl.fromLocalFile(str(output.parent)))
+        show_in_folder(output)
 
     # Previews
     def open_preview(self, kind: PreviewKind) -> None:
@@ -1108,6 +1129,111 @@ class MainWindow(QMainWindow):
         else:
             self.notifier.conversion_stopped()
 
+    # History
+    def _record(
+        self,
+        result: HistoryResult,
+        *,
+        output: Path | None = None,
+        size: int | None = None,
+        took: float | None = None,
+        fraction: float = 0.0,
+        error: str = "",
+    ) -> None:
+        media = self.session.media
+        if media is None or not self.session.format_key:
+            return
+        self.history.add(
+            HistoryRecord(
+                when=datetime.now().replace(microsecond=0),
+                source=media.path,
+                output=output,
+                format_key=self.session.format_key,
+                quality=self.session.quality,
+                custom=self.session.custom,
+                result=result,
+                size=size,
+                took=took if took is not None else time.monotonic() - self.session.started_at,
+                fraction=fraction,
+                error=error,
+            )
+        )
+        self._render_history()
+
+    @Slot(object)
+    def _record_queue_entry(self, entry: QueueEntry) -> None:
+        if entry.media is None:
+            return
+        results = {
+            QueueStatus.DONE: HistoryResult.SAVED,
+            QueueStatus.FAILED: HistoryResult.FAILED,
+            QueueStatus.CANCELED: HistoryResult.CANCELED,
+        }
+        result = results.get(entry.status)
+        if result is None:
+            return
+        fmt = format_by_key(entry.format_key)
+        self.history.add(
+            HistoryRecord(
+                when=datetime.now().replace(microsecond=0),
+                source=entry.path,
+                output=entry.output if result is HistoryResult.SAVED else None,
+                format_key=entry.format_key,
+                quality=None if fmt.lossless else entry.quality.value,
+                custom=not entry.choices.is_default,
+                result=result,
+                size=entry.size,
+                took=entry.took,
+                fraction=entry.fraction,
+                error=entry.error,
+            )
+        )
+        self._render_history()
+
+    def _render_history(self) -> None:
+        if self.machine.state.page is not Page.HISTORY:
+            return
+        rows = tuple(
+            history_row(index, record) for index, record in enumerate(self.history.records)
+        )
+        self.history_page.show_rows(rows)
+
+    def _history_record(self, index: int) -> HistoryRecord | None:
+        records = self.history.records
+        return records[index] if 0 <= index < len(records) else None
+
+    def _open_history_output(self, index: int) -> None:
+        record = self._history_record(index)
+        if record is not None and record.output is not None and record.output.exists():
+            QDesktopServices.openUrl(QUrl.fromLocalFile(str(record.output)))
+
+    def _show_history_output(self, index: int) -> None:
+        record = self._history_record(index)
+        if record is not None and record.output is not None:
+            show_in_folder(record.output)
+
+    def _show_history_details(self, index: int) -> None:
+        record = self._history_record(index)
+        if record is None:
+            return
+        report = describe(Failure(details=record.error, source=record.source))
+        title = tr(s.HISTORY_DETAILS_TITLE).format(name=record.source.name)
+        dialog = FailedDialog(report, title, reassure=False, parent=self)
+        # Only for reading: there is nothing to retry from here.
+        dialog.action_button.hide()
+        dialog.close_button.set_kind(ButtonKind.PRIMARY)
+        dialog.close_button.setFocus(Qt.FocusReason.OtherFocusReason)
+        dialog.finished.connect(dialog.deleteLater)
+        dialog.open()
+
+    def clear_history(self) -> None:
+        if not self.history.records:
+            return
+        dialog = QuitDialog.for_clearing_history(self)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            self.history.clear()
+            self._render_history()
+
     # Engine
     @Slot()
     def check_engine_again(self) -> None:
@@ -1270,6 +1396,19 @@ class MainWindow(QMainWindow):
         self.showNormal()
         self.raise_()
         self.activateWindow()
+
+
+def default_history_path() -> Path:
+    folder = QStandardPaths.writableLocation(QStandardPaths.StandardLocation.AppDataLocation)
+    return Path(folder) / "history.json"
+
+
+def show_in_folder(path: Path) -> None:
+    """Open Explorer with the file selected, or the folder when the file is gone."""
+    if sys.platform == "win32" and path.exists():
+        QProcess.startDetached("explorer", [f"/select,{path}"])
+    else:
+        QDesktopServices.openUrl(QUrl.fromLocalFile(str(path.parent)))
 
 
 def _writable(folder: Path) -> bool:

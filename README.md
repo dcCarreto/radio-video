@@ -116,8 +116,14 @@ control over encoding parameters, tracks and filters.
   - Only one conversion runs at a time: Convert is unavailable while the queue runs, and the
     queue can start once a conversion on the Convert tab finishes. Progress shows in the status bar and on the
     taskbar, a notification reports when the queue finishes, and quitting asks first.
-- Planned screens show how upcoming features will work, under a "Planned" banner: History and
-  Settings. Their settings don't act yet, except the hardware acceleration switch in Settings.
+- History: the latest 100 conversions from the Convert tab and the queue, newest first, kept in
+  a file on this computer only. Each row shows when, the source and output names, the format
+  and quality ("· Custom" after Advanced changes), the result (Saved, Failed, Canceled, or
+  File moved when the output is no longer there), size and time taken. Saved files can be
+  opened or shown in their folder; failures open the explanation and technical details.
+  Clear History… asks first and never touches the converted files.
+- The Settings screen is still a preview under a "Planned" banner; only its hardware
+  acceleration switch acts.
 - Converted preview window:
   - **Preview 15 s** converts a 15-second sample, starting a third of the way into the file, with
     the exact settings. Files of 15 seconds or less are converted entirely. **Full Preview**
@@ -135,7 +141,7 @@ control over encoding parameters, tracks and filters.
 
 ## Planned Features
 
-- Conversion history.
+- Settings: default folder, formats and quality, temporary files location and theme.
 
 ## Technology Stack
 

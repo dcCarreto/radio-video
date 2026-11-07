@@ -53,6 +53,16 @@ class QuitDialog(Dialog):
         )
 
     @classmethod
+    def for_clearing_history(cls, parent: QWidget | None = None) -> QuitDialog:
+        return cls(
+            tr(s.HISTORY_CLEAR_TITLE),
+            tr(s.HISTORY_CLEAR_TEXT),
+            tr(s.CANCEL),
+            tr(s.HISTORY_CLEAR_CONFIRM),
+            parent,
+        )
+
+    @classmethod
     def for_preview(cls, parent: QWidget | None = None) -> QuitDialog:
         return cls(
             tr(s.QUIT_PREVIEW_TITLE),
