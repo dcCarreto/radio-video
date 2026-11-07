@@ -42,7 +42,11 @@ control over encoding parameters is planned.
   - A loaded file shows a plain-language summary ("1 video track, 3 audio tracks (Portuguese,
     English)…"), container facts and every track with codec, details, language, title and the
     default flag.
-  - Keyboard: Ctrl+O, Ctrl+Enter (convert), Ctrl+P and Ctrl+Shift+P (previews), Esc (cancel),
+  - Play opens the loaded file in the built-in player as it is, without converting anything,
+    and stays available during a conversion. The original and converted previews link to each
+    other for a quick comparison.
+  - Keyboard: Ctrl+O, Ctrl+Enter (convert), Ctrl+P and Ctrl+Shift+P (previews),
+    Ctrl+Shift+Space (play the original), Esc (cancel),
     Ctrl+1–4 (tabs), F1 (About); a visible focus ring for keyboard use.
   - Conversion progress also shows on the taskbar button, and a notification reports the result
     when the window is in the background.

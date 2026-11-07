@@ -301,6 +301,7 @@ class MainWindow(QMainWindow):
         page = self.convert_page
         page.missing.check_again.connect(self.check_engine_again)
         page.file.source.open_requested.connect(self.open_file_dialog)
+        page.file.source.play_requested.connect(lambda: self.open_preview(PreviewKind.ORIGINAL))
         panel = page.file.panel
         panel.mode_changed.connect(self._on_mode_changed)
         panel.format_changed.connect(self._on_format_changed)
@@ -370,6 +371,7 @@ class MainWindow(QMainWindow):
         shortcut("Ctrl+Enter", self.start_conversion)
         shortcut("Ctrl+P", lambda: self.open_preview(PreviewKind.SAMPLE))
         shortcut("Ctrl+Shift+P", lambda: self.open_preview(PreviewKind.FULL))
+        shortcut("Ctrl+Shift+Space", lambda: self.open_preview(PreviewKind.ORIGINAL))
         shortcut("Esc", self._on_escape)
         shortcut("Ctrl+M", self.toggle_mode)
         for number, page in enumerate(PAGE_INDEX, start=1):
@@ -405,6 +407,7 @@ class MainWindow(QMainWindow):
         )
         if self.preview_window is not None:
             self.preview_window.set_outdated(self.machine.preview_outdated())
+            self.preview_window.set_locked(state.locked)
         self._render_status(state)
         self._render_taskbar(state)
         self._render_dialog(state)
@@ -798,21 +801,34 @@ class MainWindow(QMainWindow):
         media = self.session.media
         if media is None or self.engine.tools is None:
             return
+        original = kind is PreviewKind.ORIGINAL
+        if self.machine.state.locked and not original:
+            # Keep the open window: a converted preview has to wait for the conversion.
+            return
         if self.preview_window is not None:
             self.preview_window.close()
         if not self.machine.preview_requested(kind):
             return
         state = self.machine.state
         fmt = self.current_format(state)
-        request = PreviewRequest(
-            media=media,
-            fmt=fmt,
-            quality=state.quality,
-            kind=kind,
-            contents=vm.output_contents(fmt, media, fmt.plan(media)),
-            calculated_size=estimate_output_size(fmt.settings(state.quality), media),
-            settings=self.conversion_settings(fmt, state.quality),
-        )
+        if original:
+            request = PreviewRequest(
+                media=media,
+                fmt=fmt,
+                quality=state.quality,
+                kind=kind,
+                contents=vm.original_contents(media),
+            )
+        else:
+            request = PreviewRequest(
+                media=media,
+                fmt=fmt,
+                quality=state.quality,
+                kind=kind,
+                contents=vm.output_contents(fmt, media, fmt.plan(media)),
+                calculated_size=estimate_output_size(fmt.settings(state.quality), media),
+                settings=self.conversion_settings(fmt, state.quality),
+            )
         window = PreviewWindow(
             self.engine.tools.ffmpeg,
             request,
@@ -826,7 +842,9 @@ class MainWindow(QMainWindow):
         window.canceled.connect(self.machine.preview_canceled)
         window.closed.connect(lambda w=window: self._on_preview_closed(w))
         window.retry_requested.connect(self.open_preview)
+        window.switch_requested.connect(self.open_preview)
         window.convert_requested.connect(self._convert_from_preview)
+        window.set_locked(state.locked)
         self.preview_window = window
         window.show()
         window.start()

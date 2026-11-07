@@ -352,3 +352,26 @@ def test_hardware_detection_runs_in_the_background(
     window = _window(qtbot, Engine(tools, ALL_ENCODERS), settings, detect_hardware=lambda *_: None)
     qtbot.waitUntil(lambda: window.engine.hardware_checked, timeout=TIMEOUT_MS)
     assert window.settings_page.hardware_help.text().startswith("No supported graphics card")
+
+
+def test_play_opens_the_original_and_stays_available_while_converting(
+    demo_window: MainWindow,
+) -> None:
+    # CI runners have no audio device; Qt Multimedia can hang stopping audio playback there.
+    demo_window.preview_autoplay = False
+    machine = demo_window.machine
+    machine.conversion_requested()
+    machine.conversion_started()
+    demo_window.convert_page.file.source.play_button.click()
+    preview = demo_window.preview_window
+    assert preview is not None and preview.original
+    assert machine.state.dialog is Dialog.PREVIEW
+    assert not preview.switch_button.isEnabled()
+    # A converted preview waits for the conversion and leaves the player open.
+    demo_window.open_preview(PreviewKind.SAMPLE)
+    assert demo_window.preview_window is preview
+    machine.conversion_canceled()
+    assert preview.switch_button.isEnabled()
+    preview.close()
+    assert demo_window.preview_window is None
+    assert machine.state.preview is None

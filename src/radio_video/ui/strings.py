@@ -547,6 +547,37 @@ PREVIEW_AGAIN = QT_TRANSLATE_NOOP("RadioVideo", "Create Preview Again")
 PREVIEW_CONVERT_FULL = QT_TRANSLATE_NOOP("RadioVideo", "Convert Full File")
 PREVIEW_OUTDATED = QT_TRANSLATE_NOOP("RadioVideo", "Your settings changed after this preview.")
 PREVIEW_UPDATE = QT_TRANSLATE_NOOP("RadioVideo", "Update Preview")
+PREVIEW_PLAY_ORIGINAL = QT_TRANSLATE_NOOP("RadioVideo", "Play Original")
+PREVIEW_PLAY_ORIGINAL_TOOLTIP = QT_TRANSLATE_NOOP(
+    "RadioVideo", "Play the file you opened as it is, to compare"
+)
+
+# Original player: the opened file played as it is, nothing converted
+ORIGINAL_WINDOW_TITLE = QT_TRANSLATE_NOOP("RadioVideo", "Original: {name}")
+ORIGINAL_BADGE = QT_TRANSLATE_NOOP("RadioVideo", "Original")
+ORIGINAL_NOTE = QT_TRANSLATE_NOOP(
+    "RadioVideo", "This is the file you opened, played as it is. Nothing was converted."
+)
+ORIGINAL_SIDE_TITLE = QT_TRANSLATE_NOOP("RadioVideo", "This file")
+ORIGINAL_SIZE = QT_TRANSLATE_NOOP("RadioVideo", "Size")
+ORIGINAL_CONTENTS = QT_TRANSLATE_NOOP("RadioVideo", "Inside")
+ORIGINAL_AUDIO_TITLE = QT_TRANSLATE_NOOP("RadioVideo", "Original audio")
+ORIGINAL_FAILED_TITLE = QT_TRANSLATE_NOOP("RadioVideo", "This file can’t be played here")
+ORIGINAL_FAILED_TEXT = QT_TRANSLATE_NOOP(
+    "RadioVideo",
+    "The built-in player doesn’t support something in this file. It can still be converted.",
+)
+ORIGINAL_FAILED_DO = QT_TRANSLATE_NOOP(
+    "RadioVideo", "Create a converted preview to watch it with your settings."
+)
+ORIGINAL_PREVIEW_CONVERTED = QT_TRANSLATE_NOOP("RadioVideo", "Preview Converted")
+ORIGINAL_PREVIEW_CONVERTED_TOOLTIP = QT_TRANSLATE_NOOP(
+    "RadioVideo", "Convert a 15-second sample with your settings and play it"
+)
+PLAY_SOURCE = QT_TRANSLATE_NOOP("RadioVideo", "Play")
+PLAY_SOURCE_TOOLTIP = QT_TRANSLATE_NOOP(
+    "RadioVideo", "Play the file as it is, without converting anything (Ctrl+Shift+Space)"
+)
 
 # Advanced Mode (planned)
 ADV_TAB_VIDEO = QT_TRANSLATE_NOOP("RadioVideo", "Video")

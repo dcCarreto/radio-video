@@ -239,6 +239,29 @@ def _preview(phase: Phase, key: str = "mp4-h264") -> Callable[[MainWindow], None
     return apply
 
 
+def _original(window: MainWindow) -> None:
+    """The opened file played as it is, nothing converted."""
+    _loaded(window)
+    window.machine.preview_requested(PreviewKind.ORIGINAL)
+    state = window.machine.state
+    request = PreviewRequest(
+        DEMO_MEDIA,
+        window.current_format(state),
+        state.quality,
+        PreviewKind.ORIGINAL,
+        vm.original_contents(DEMO_MEDIA),
+    )
+    compact = window.width() < COMPACT_BELOW
+    preview = PreviewWindow(
+        Path("ffmpeg.exe"), request, compact=compact, autoplay=False, parent=window
+    )
+    preview.canvas.show_image(_demo_frame())
+    preview.player_bar.set_duration(133_000)
+    preview.player_bar.set_position(41_000)
+    window.preview_window = preview
+    preview.show()
+
+
 @dataclass(frozen=True)
 class GalleryState:
     key: str
@@ -268,6 +291,7 @@ STATES = (
     GalleryState("pv-audio", "Preview: audio only", _preview(Phase.READY, "mp3")),
     GalleryState("pv-failed", "Preview: failed", _preview(Phase.FAILED)),
     GalleryState("pv-canceled", "Preview: canceled", _preview(Phase.CANCELED)),
+    GalleryState("pv-original", "Original: played as it is", _original),
     GalleryState("quit", "Quit during conversion", _quit),
     GalleryState("about", "About", _about),
     GalleryState("adv-video", "Advanced Mode: Video (planned)", _advanced("video")),

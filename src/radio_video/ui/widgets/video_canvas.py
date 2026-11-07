@@ -1,4 +1,4 @@
-"""Video surface with a persistent "Converted preview" badge.
+"""Video surface with a persistent badge saying what is playing.
 
 QVideoWidget renders into a native child window that other widgets cannot be drawn over,
 so frames arrive through a QVideoSink and are painted here, badge included.
@@ -12,6 +12,7 @@ from PySide6.QtMultimedia import QVideoFrame, QVideoSink
 from PySide6.QtWidgets import QSizePolicy, QWidget
 
 from radio_video.ui import theme
+from radio_video.ui.icons import IconName
 from radio_video.ui.widgets.badge import BadgeTone, badge_size, paint_badge
 from radio_video.ui.widgets.painting import antialiased, fill_rounded, follow_theme
 
@@ -20,9 +21,12 @@ RADIUS = 4
 
 
 class VideoCanvas(QWidget):
-    def __init__(self, badge_text: str, parent: QWidget | None = None) -> None:
+    def __init__(
+        self, badge_text: str, badge_icon: IconName = "Eye", parent: QWidget | None = None
+    ) -> None:
         super().__init__(parent)
         self._badge_text = badge_text
+        self._badge_icon: IconName = badge_icon
         self._image = QImage()
         self.sink = QVideoSink(self)
         self.sink.videoFrameChanged.connect(self._on_frame)
@@ -65,11 +69,11 @@ class VideoCanvas(QWidget):
             target.moveCenter(rect.center())
             painter.setRenderHint(painter.RenderHint.SmoothPixmapTransform)
             painter.drawImage(target, self._image)
-        size = badge_size(self._badge_text, BadgeTone.ACCENT, "Eye")
+        size = badge_size(self._badge_text, BadgeTone.ACCENT, self._badge_icon)
         paint_badge(
             painter,
             QRectF(BADGE_INSET, BADGE_INSET, size.width(), size.height()),
             self._badge_text,
             BadgeTone.ACCENT,
-            "Eye",
+            self._badge_icon,
         )
