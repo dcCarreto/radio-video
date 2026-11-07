@@ -211,3 +211,50 @@ def test_vbr_quality_uses_q_a() -> None:
 def test_empty_map_is_rejected() -> None:
     with pytest.raises(ValueError, match="no audio or video"):
         mapped_arguments(H264_AAC, StreamMap())
+
+
+def test_video_filters_chain_in_order() -> None:
+    video = VideoOptions(codec="libx264", crf=23, height=720, aspect="4:3", deinterlace="auto")
+    args = video_arguments(video)
+    assert _option(args, "-vf") == "yadif=deint=1,scale=-2:720,setdar=4/3"
+
+
+def test_fast_start_only_for_mp4_family() -> None:
+    settings = ConversionSettings(video=H264_AAC.video, audio=H264_AAC.audio, fast_start=True)
+    mp4 = build_conversion_command(Path("ffmpeg"), _job(settings=settings), Path("o.part"))
+    assert _option(mp4, "-movflags") == "+faststart"
+    mkv = build_conversion_command(
+        Path("ffmpeg"),
+        _job(settings=settings, destination=Path("C:/out/movie.mkv")),
+        Path("o.part"),
+    )
+    assert "-movflags" not in mkv
+
+
+def test_loudness_normalization_sets_the_sample_rate_back() -> None:
+    settings = ConversionSettings(
+        video=None, audio=AudioOptions(codec="libmp3lame", bitrate=192_000), normalize_loudness=True
+    )
+    args = mapped_arguments(settings, StreamMap(audio=(1,)))
+    assert _option(args, "-af").startswith("loudnorm=")
+    assert _option(args, "-ar") == "48000"
+
+
+def test_copied_audio_is_not_downmixed() -> None:
+    settings = ConversionSettings(video=None, audio=AudioOptions(codec="copy"))
+    args = mapped_arguments(settings, StreamMap(audio=(1,), downmix_to_stereo=True))
+    assert "-ac" not in args
+
+
+def test_dropping_metadata_drops_chapters() -> None:
+    settings = ConversionSettings(video=None, audio=AudioOptions("aac"), preserve_metadata=False)
+    args = mapped_arguments(settings, StreamMap(audio=(1,)))
+    assert _option(args, "-map_chapters") == "-1"
+
+
+def test_hardware_rate_control_follows_the_method() -> None:
+    quality = video_arguments(VideoOptions(codec="h264_amf", crf=21))
+    assert _option(quality, "-rc") == "cqp"
+    bitrate = video_arguments(VideoOptions(codec="h264_amf", bitrate=5_000_000))
+    assert _option(bitrate, "-rc") == "vbr_peak"
+    assert "-qp_i" not in bitrate

@@ -71,6 +71,8 @@ class PanelView:
     result_title: str = ""
     result_text: str = ""
     summary: str = ""
+    # Advanced choices are in effect: Simple shows "Custom" with a way back.
+    custom: bool = False
 
     @property
     def locked(self) -> bool:
@@ -182,6 +184,7 @@ class ConvertPanel(QFrame):
     cancel_requested = Signal()
     show_in_folder_requested = Signal()
     done_requested = Signal()
+    reset_requested = Signal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -196,13 +199,7 @@ class ConvertPanel(QFrame):
         self.mode = SegmentedControl(
             [
                 SegmentOption("simple", tr(s.MODE_SIMPLE), tooltip=tr(s.MODE_SIMPLE_TIP)),
-                SegmentOption(
-                    "advanced",
-                    tr(s.MODE_ADVANCED),
-                    tooltip=tr(s.MODE_ADVANCED_TIP),
-                    planned=True,
-                    planned_text=tr(s.BADGE_PLANNED),
-                ),
+                SegmentOption("advanced", tr(s.MODE_ADVANCED), tooltip=tr(s.MODE_ADVANCED_TIP)),
             ],
             accessible_name=tr(s.MODE_LABEL),
         )
@@ -232,9 +229,14 @@ class ConvertPanel(QFrame):
         )
         self.quality_help = label("", TextStyle.CAPTION, "secondary", wrap=True)
         self.lossless_note = Note(tr(s.QUALITY_LOSSLESS))
+        self.custom_note = Note(tr(s.CUSTOM_QUALITY), "Settings", "accent")
+        self.reset_button = Button(tr(s.CUSTOM_RESET), size=ButtonSize.SMALL, icon="RotateCcw")
+        self.reset_button.clicked.connect(self.reset_requested)
+        self.custom_note.add_widget(self.reset_button)
         quality_box.addWidget(self.quality)
         quality_box.addWidget(self.quality_help)
         quality_box.addWidget(self.lossless_note)
+        quality_box.addWidget(self.custom_note)
 
         folder_box, _ = _field(3, tr(s.FIELD_SAVE_TO))
         self.folder = FieldBox()
@@ -386,6 +388,8 @@ class ConvertPanel(QFrame):
         self.quality_help.setVisible(not view.lossless)
         self.quality_help.setText(vm.quality_help(view.quality))
         self.lossless_note.setVisible(view.lossless)
+        self.custom_note.setVisible(view.custom)
+        self.reset_button.setEnabled(not locked)
         self.folder.set_text(view.folder)
         self.folder_error.setVisible(bool(view.folder_error))
         self.output.apply_view(view)

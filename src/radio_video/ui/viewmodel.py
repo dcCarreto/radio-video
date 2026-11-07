@@ -11,6 +11,8 @@ from pathlib import Path
 
 from PySide6.QtCore import QLocale
 
+from radio_video.models.advanced import Recipe
+from radio_video.models.conversion import ConversionSettings
 from radio_video.models.estimate import codec_display_name, estimate_output_size
 from radio_video.models.media import MediaInfo, StreamInfo, StreamType
 from radio_video.models.presets import OutputFormat, Quality
@@ -61,6 +63,8 @@ DECODER_NAMES = {
 }
 SUBTITLE_TARGETS = {"mov_text": s.SUBTITLE_MP4_TEXT, "webvtt": s.SUBTITLE_WEBVTT}
 LAYOUT_NAMES = {1: s.DETAIL_MONO, 2: s.DETAIL_STEREO, 6: "5.1", 8: "7.1"}
+# Channel counts Advanced Mode can mix down to.
+CHANNEL_NAMES = {1: s.DETAIL_MONO, 2: s.DETAIL_STEREO}
 
 
 # Quality and format pickers
@@ -332,27 +336,58 @@ def facts(media: MediaInfo) -> tuple[list[str], str]:
 # What the output will contain
 
 
-def output_contents(fmt: OutputFormat, media: MediaInfo, plan: StreamMap) -> list[tuple[str, str]]:
+def _picture_size(source: StreamInfo, height: int | None) -> str:
+    if not source.width or not source.height:
+        return ""
+    if height is None or height >= source.height:
+        return f"{source.width}×{source.height}"
+    width = round(source.width * height / source.height / 2) * 2
+    return f"{width}×{height}"
+
+
+def output_contents(
+    fmt: OutputFormat,
+    media: MediaInfo,
+    plan: StreamMap,
+    settings: ConversionSettings | None = None,
+) -> list[tuple[str, str]]:
+    """What the output will hold. ``settings`` defaults to the format's own."""
     rows: list[tuple[str, str]] = []
     left_out: list[str] = []
-    settings = fmt.settings(Quality.BALANCED)
+    settings = settings or fmt.settings(Quality.BALANCED)
     streams = {stream.index: stream for stream in media.streams}
     has_cover = any(st.is_attached_picture for st in media.streams)
 
     if fmt.is_video:
-        if plan.video is not None and settings.video is not None:
+        video_settings = settings.video
+        if plan.video is not None and video_settings is not None:
             video = streams[plan.video]
-            parts = [codec_display_name(settings.video.codec)]
-            if video.width and video.height:
-                parts.append(f"{video.width}×{video.height}")
-            if video.frame_rate:
-                parts.append(format_frame_rate(video.frame_rate))
+            if video_settings.is_copy:
+                name = DECODER_NAMES.get(video.codec_name or "", video.codec_name or "")
+                parts = [tr(s.CONTENT_COPIED).format(codec=name)]
+            else:
+                parts = [codec_display_name(video_settings.codec)]
+            if size := _picture_size(
+                video, None if video_settings.is_copy else video_settings.height
+            ):
+                parts.append(size)
+            rate = video.frame_rate if video_settings.is_copy else video_settings.frame_rate
+            if rate or video.frame_rate:
+                parts.append(format_frame_rate(rate or video.frame_rate))
             rows.append((tr(s.ROW_VIDEO), ", ".join(parts)))
+        elif media.has_video:
+            left_out.append(tr(s.LEFT_OUT_VIDEO))
         if plan.audio and settings.audio is not None:
-            codec = codec_display_name(settings.audio.codec)
-            rows.append(
-                (tr(s.ROW_AUDIO), tr(s.CONTENT_AUDIO_TRACKS, len(plan.audio)).format(codec=codec))
-            )
+            count = len(plan.audio)
+            if settings.audio.is_copy:
+                text = tr(s.CONTENT_SUBTITLES_COPIED, count)
+            else:
+                codec = codec_display_name(settings.audio.codec)
+                text = tr(s.CONTENT_AUDIO_TRACKS, count).format(codec=codec)
+            rows.append((tr(s.ROW_AUDIO), text))
+        others = len(media.audio_streams) - len(plan.audio)
+        if others > 0:
+            left_out.append(tr(s.LEFT_OUT_AUDIO, others))
         if plan.subtitles:
             count = len(plan.subtitles)
             if plan.subtitle_codec == SUBTITLE_COPY:
@@ -361,8 +396,12 @@ def output_contents(fmt: OutputFormat, media: MediaInfo, plan: StreamMap) -> lis
                 target = tr(SUBTITLE_TARGETS.get(plan.subtitle_codec or "", s.SUBTITLE_MP4_TEXT))
                 text = tr(s.CONTENT_SUBTITLES_CONVERTED, count).format(codec=target)
             rows.append((tr(s.ROW_SUBTITLES), text))
-        if len(plan.subtitles) < len(media.subtitle_streams):
+        missing = [st for st in media.subtitle_streams if st.index not in plan.subtitles]
+        image_only = all(not is_text_subtitle(st) for st in missing)
+        if missing and image_only and fmt.policy.subtitle_codec != SUBTITLE_COPY:
             left_out.append(tr(s.LEFT_OUT_IMAGE_SUBTITLES))
+        elif missing:
+            left_out.append(tr(s.LEFT_OUT_SUBTITLE_TRACKS, len(missing)))
     else:
         if plan.audio:
             index = plan.audio[0]
@@ -375,7 +414,12 @@ def output_contents(fmt: OutputFormat, media: MediaInfo, plan: StreamMap) -> lis
                 else tr(s.CONTENT_TRACK).format(number=number)
             )
             layout = layout_name(track)
-            if plan.downmix_to_stereo:
+            audio = settings.audio
+            if audio is not None and audio.channels in CHANNEL_NAMES:
+                text = tr(s.CONTENT_DOWNMIX_TO).format(
+                    track=name, layout=layout, target=tr(CHANNEL_NAMES[audio.channels]).lower()
+                )
+            elif plan.downmix_to_stereo:
                 text = tr(s.CONTENT_DOWNMIX).format(track=name, layout=layout)
             elif fmt.lossless and (track.channels or 0) > STEREO_CHANNELS:
                 text = tr(s.CONTENT_LAYOUT_KEPT).format(track=name, layout=layout)
@@ -446,11 +490,18 @@ def format_estimate_size(size: int) -> str:
 
 
 def estimate(
-    fmt: OutputFormat, quality: Quality, media: MediaInfo, measured: int | None
+    fmt: OutputFormat,
+    quality: Quality,
+    media: MediaInfo,
+    measured: int | None,
+    recipe: Recipe | None = None,
 ) -> Estimate:
     """Honest size estimate: calculated when the bitrate fixes it, measured after a preview
     with the same settings, otherwise unknown."""
-    calculated = estimate_output_size(fmt.settings(quality), media)
+    if recipe is None:
+        calculated = estimate_output_size(fmt.settings(quality), media)
+    else:
+        calculated = estimate_output_size(recipe.settings, media, recipe.streams)
     if calculated is not None:
         value = tr(s.ESTIMATE_VALUE).format(size=format_estimate_size(calculated))
         return Estimate(value, tr(s.ESTIMATE_CALCULATED), True)

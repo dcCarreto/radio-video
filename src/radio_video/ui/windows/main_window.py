@@ -53,11 +53,12 @@ from PySide6.QtWidgets import (
 from radio_video.ffmpeg.capabilities import CapabilityError, ffmpeg_version, list_encoders
 from radio_video.ffmpeg.locator import FFmpegNotFoundError, FFmpegTools, locate_tools
 from radio_video.ffmpeg.progress import ProgressUpdate
+from radio_video.models.advanced import EncoderChoice, Recipe, resolve
 from radio_video.models.conversion import ConversionJob, ConversionSettings
 from radio_video.models.estimate import estimate_output_size
 from radio_video.models.hardware import HardwareSupport, accelerate
 from radio_video.models.media import MediaInfo
-from radio_video.models.presets import OutputFormat, Quality, available_formats, format_by_key
+from radio_video.models.presets import OutputFormat, available_formats, format_by_key
 from radio_video.services.analysis import MediaAnalyzer
 from radio_video.services.conversion import ConversionError, ConversionRunner
 from radio_video.ui import icons, theme
@@ -71,7 +72,7 @@ from radio_video.ui.file_types import open_file_filter
 from radio_video.ui.native.dwm import style_title_bar
 from radio_video.ui.native.notify import Notifier
 from radio_video.ui.native.taskbar import TaskbarProgress, TaskbarState
-from radio_video.ui.pages.advanced_panel import output_summary
+from radio_video.ui.pages.advanced_panel import AdvancedView, output_summary
 from radio_video.ui.pages.convert_page import ConvertPage
 from radio_video.ui.pages.convert_panel import PanelView
 from radio_video.ui.pages.planned_pages import HistoryPage, QueuePage, SettingsPage
@@ -312,6 +313,9 @@ class MainWindow(QMainWindow):
         panel.cancel_requested.connect(self.cancel_conversion)
         panel.show_in_folder_requested.connect(self.show_output_in_folder)
         panel.done_requested.connect(self.machine.dismiss_result)
+        panel.reset_requested.connect(self.machine.reset_advanced)
+        panel.advanced.choices_changed.connect(self.machine.set_advanced)
+        panel.advanced.format_changed.connect(self._on_format_changed)
 
         self.pages = QStackedWidget()
         self.pages.addWidget(self.convert_page)
@@ -427,8 +431,7 @@ class MainWindow(QMainWindow):
         previous_job = self._last_job
         advanced = state.mode is Mode.ADVANCED
         if advanced:
-            fmt = self.current_format(state)
-            file_view.panel.advanced.show_settings(media, fmt, state.quality)
+            file_view.panel.advanced.show_view(self.advanced_view(state, media))
         file_view.set_advanced(advanced)
         file_view.panel.apply_view(self.panel_view(state, media))
         if previous_job is not state.job:
@@ -437,15 +440,35 @@ class MainWindow(QMainWindow):
                 target.setFocus(Qt.FocusReason.OtherFocusReason)
         self._last_job = state.job
 
+    def advanced_view(self, state: UiState, media: MediaInfo) -> AdvancedView:
+        fmt = self.current_format(state)
+        recipe = self.recipe(state, media)
+        formats = available_formats(self.engine.encoders, media.has_video)
+        return AdvancedView(
+            media=media,
+            fmt=fmt,
+            quality=state.quality,
+            choices=state.advanced,
+            recipe=recipe,
+            final=self.final_settings(recipe, state),
+            groups=vm.format_groups(formats, media.has_video),
+            formats=formats,
+            encoders=frozenset(self.engine.encoders),
+            hardware=self.engine.hardware,
+            hardware_on=self.hardware_enabled,
+            locked=state.locked,
+        )
+
     def panel_view(self, state: UiState, media: MediaInfo) -> PanelView:
         formats = available_formats(self.engine.encoders, media.has_video)
         fmt = self.current_format(state)
+        recipe = self.recipe(state, media)
         folder = self.session.folder or media.path.parent
         if state.job is Job.SUCCESS and state.output is not None:
             name = vm.OutputName(state.output, None)
         else:
             name = self.output_namer(folder, media, fmt)
-        estimate = vm.estimate(fmt, state.quality, media, state.measured_size)
+        estimate = vm.estimate(fmt, state.quality, media, state.measured_size, recipe)
         result_title = result_text = ""
         if state.job is Job.SUCCESS and state.output is not None:
             result_title = tr(s.SUCCESS_TITLE).format(
@@ -467,7 +490,7 @@ class MainWindow(QMainWindow):
             output_name=name.path.name,
             output_is_video=fmt.is_video,
             bumped_text=vm.name_bumped_text(name),
-            contents=vm.output_contents(fmt, media, fmt.plan(media)),
+            contents=vm.output_contents(fmt, media, recipe.streams, recipe.settings),
             estimate=estimate,
             job=state.job,
             mode=state.mode,
@@ -477,9 +500,16 @@ class MainWindow(QMainWindow):
             speed_tip=vm.speed_tooltip(state.progress.speed),
             result_title=result_title,
             result_text=result_text,
-            summary=output_summary(media, fmt, state.quality)
+            summary=output_summary(
+                media,
+                fmt,
+                recipe,
+                self.final_settings(recipe, state),
+                estimate.value if estimate.known else tr(s.ADV_SIZE_AFTER_PREVIEW),
+            )
             if state.mode is Mode.ADVANCED
             else "",
+            custom=not state.advanced.is_default,
         )
 
     def _render_status(self, state: UiState) -> None:
@@ -546,8 +576,8 @@ class MainWindow(QMainWindow):
         return self._dialog
 
     def failure_for(self, state: UiState, media: MediaInfo) -> Failure:
-        fmt = self.current_format(state)
-        calculated = estimate_output_size(fmt.settings(state.quality), media)
+        recipe = self.recipe(state, media)
+        calculated = estimate_output_size(recipe.settings, media, recipe.streams)
         return Failure(
             details=state.error or "",
             source=media.path,
@@ -733,12 +763,13 @@ class MainWindow(QMainWindow):
         self.session.destination = name.path
         self.session.started_at = time.monotonic()
         try:
+            recipe = self.recipe(state, media)
             job = ConversionJob(
                 source=media.path,
                 destination=name.path,
-                settings=self.conversion_settings(fmt, state.quality, software=software),
+                settings=self.final_settings(recipe, state, software=software),
                 duration=media.duration,
-                streams=fmt.plan(media),
+                streams=recipe.streams,
             )
             self.runner.start(job)
         except (ConversionError, ValueError, OSError) as exc:
@@ -820,14 +851,16 @@ class MainWindow(QMainWindow):
                 contents=vm.original_contents(media),
             )
         else:
+            recipe = self.recipe(state, media)
             request = PreviewRequest(
                 media=media,
                 fmt=fmt,
                 quality=state.quality,
                 kind=kind,
-                contents=vm.output_contents(fmt, media, fmt.plan(media)),
-                calculated_size=estimate_output_size(fmt.settings(state.quality), media),
-                settings=self.conversion_settings(fmt, state.quality),
+                contents=vm.output_contents(fmt, media, recipe.streams, recipe.settings),
+                calculated_size=estimate_output_size(recipe.settings, media, recipe.streams),
+                settings=self.final_settings(recipe, state),
+                streams=recipe.streams,
             )
         window = PreviewWindow(
             self.engine.tools.ffmpeg,
@@ -881,14 +914,30 @@ class MainWindow(QMainWindow):
     def hardware_enabled(self) -> bool:
         return bool(self.settings.value(HARDWARE_KEY, True, type=bool))
 
-    def conversion_settings(
-        self, fmt: OutputFormat, quality: Quality, *, software: bool = False
+    def recipe(self, state: UiState | None = None, media: MediaInfo | None = None) -> Recipe:
+        """Settings and tracks for the current format, quality and Advanced choices."""
+        state = state or self.machine.state
+        media = media or self.session.media
+        if media is None:
+            raise ValueError("No file is open")
+        return resolve(self.current_format(state), state.quality, media, state.advanced)
+
+    def final_settings(
+        self, recipe: Recipe, state: UiState | None = None, *, software: bool = False
     ) -> ConversionSettings:
-        """The format's settings, with the video on the graphics card when that is on."""
-        settings = fmt.settings(quality)
-        if software or not self.hardware_enabled:
-            return settings
-        return accelerate(settings, self.engine.hardware)
+        """The recipe's settings, with the video on the graphics card when that is chosen.
+
+        Advanced Mode can ask for software or the graphics card; otherwise the Settings
+        switch decides.
+        """
+        state = state or self.machine.state
+        encoder = state.advanced.encoder
+        use_card = encoder is EncoderChoice.HARDWARE or (
+            encoder is EncoderChoice.AUTO and self.hardware_enabled
+        )
+        if software or not use_card:
+            return recipe.settings
+        return accelerate(recipe.settings, self.engine.hardware)
 
     def hardware_text(self) -> str:
         support = self.engine.hardware

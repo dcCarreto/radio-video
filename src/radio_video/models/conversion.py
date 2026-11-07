@@ -9,6 +9,9 @@ from radio_video.models.tracks import StreamMap
 COPY = "copy"
 
 _NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
+_ASPECT = re.compile(r"^[1-9][0-9]{0,3}:[1-9][0-9]{0,3}$")
+# Deinterlacing: "auto" only touches frames marked as interlaced, "always" every frame.
+DEINTERLACE_MODES = frozenset({"auto", "always"})
 
 
 def _check_name(kind: str, value: str | None) -> None:
@@ -37,11 +40,18 @@ class VideoOptions:
     height: int | None = None
     frame_rate: float | None = None
     pixel_format: str | None = None
+    # Display aspect ratio such as "16:9"; only the shape on screen changes.
+    aspect: str | None = None
+    deinterlace: str | None = None
 
     def __post_init__(self) -> None:
         _check_name("video codec", self.codec)
         _check_name("preset", self.preset)
         _check_name("pixel format", self.pixel_format)
+        if self.aspect is not None and not _ASPECT.match(self.aspect):
+            raise ValueError(f"Invalid aspect ratio: {self.aspect!r}")
+        if self.deinterlace is not None and self.deinterlace not in DEINTERLACE_MODES:
+            raise ValueError(f"Invalid deinterlace mode: {self.deinterlace!r}")
         for name in ("width", "height", "frame_rate"):
             _check_positive(name, getattr(self, name))
         if self.bitrate is not None and self.bitrate < 0:
@@ -67,6 +77,8 @@ class VideoOptions:
                 self.height,
                 self.frame_rate,
                 self.pixel_format,
+                self.aspect,
+                self.deinterlace,
             )
         )
 
@@ -105,10 +117,16 @@ class ConversionSettings:
     video: VideoOptions | None
     audio: AudioOptions | None
     preserve_metadata: bool = True
+    # Moves the MP4 index to the start so web playback can begin before the download ends.
+    fast_start: bool = False
+    # EBU R128 loudness normalization of every audio track; needs re-encoded audio.
+    normalize_loudness: bool = False
 
     def __post_init__(self) -> None:
         if self.video is None and self.audio is None:
             raise ValueError("Output must contain video, audio or both")
+        if self.normalize_loudness and (self.audio is None or self.audio.is_copy):
+            raise ValueError("Loudness normalization needs re-encoded audio")
 
 
 @dataclass(frozen=True)

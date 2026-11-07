@@ -43,7 +43,19 @@ def test_other_settings_stay_in_software() -> None:
         settings = format_by_key(key).settings(Quality.BALANCED)
         assert accelerate(settings, NVIDIA) == settings
     assert accelerate(format_by_key("mp4-h264").settings(Quality.HIGH), None).video is not None
-    bitrate_only = ConversionSettings(
-        VideoOptions(codec="libx264", bitrate=2_000_000), AudioOptions(codec="aac")
+    ten_bit = ConversionSettings(
+        VideoOptions(codec="libx265", crf=26, pixel_format="yuv420p10le"), AudioOptions("aac")
     )
-    assert accelerate(bitrate_only, NVIDIA) == bitrate_only
+    assert accelerate(ten_bit, NVIDIA) == ten_bit
+    copy = ConversionSettings(VideoOptions(codec="copy"), AudioOptions(codec="aac"))
+    assert accelerate(copy, NVIDIA) == copy
+
+
+def test_target_bitrate_moves_to_the_graphics_card() -> None:
+    bitrate_only = ConversionSettings(
+        VideoOptions(codec="libx264", bitrate=2_000_000, preset="slow"), AudioOptions("aac")
+    )
+    video = accelerate(bitrate_only, NVIDIA).video
+    assert video is not None
+    assert (video.codec, video.crf, video.bitrate) == ("h264_nvenc", None, 2_000_000)
+    assert (video.preset, video.pixel_format) == ("p4", "nv12")

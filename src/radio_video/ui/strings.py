@@ -312,10 +312,13 @@ CONTENT_TRACK_LANGUAGE = QT_TRANSLATE_NOOP("RadioVideo", "Track {number} ({langu
 CONTENT_DOWNMIX = QT_TRANSLATE_NOOP("RadioVideo", "{track}, {layout} mixed down to stereo")
 CONTENT_LAYOUT_KEPT = QT_TRANSLATE_NOOP("RadioVideo", "{track}, {layout} kept")
 CONTENT_LAYOUT = QT_TRANSLATE_NOOP("RadioVideo", "{track}, {layout}")
+CONTENT_DOWNMIX_TO = QT_TRANSLATE_NOOP("RadioVideo", "{track}, {layout} mixed to {target}")
+CONTENT_COPIED = QT_TRANSLATE_NOOP("RadioVideo", "{codec}, copied as it is")
 LEFT_OUT_VIDEO = QT_TRANSLATE_NOOP("RadioVideo", "Video")
 LEFT_OUT_AUDIO = QT_TRANSLATE_NOOP("RadioVideo", "%n other audio track(s)")
 LEFT_OUT_SUBTITLES = QT_TRANSLATE_NOOP("RadioVideo", "subtitles")
 LEFT_OUT_IMAGE_SUBTITLES = QT_TRANSLATE_NOOP("RadioVideo", "image subtitles")
+LEFT_OUT_SUBTITLE_TRACKS = QT_TRANSLATE_NOOP("RadioVideo", "%n subtitle track(s)")
 LEFT_OUT_COVER = QT_TRANSLATE_NOOP("RadioVideo", "cover art")
 LIST_SEPARATOR = QT_TRANSLATE_NOOP("RadioVideo", ", ")
 SUBTITLE_MP4_TEXT = QT_TRANSLATE_NOOP("RadioVideo", "MP4 text")
@@ -498,9 +501,6 @@ PLANNED_SETTINGS = QT_TRANSLATE_NOOP(
     "RadioVideo",
     "Only Performance works so far. The other settings show how they will work.",
 )
-PLANNED_ADVANCED = QT_TRANSLATE_NOOP(
-    "RadioVideo", "Advanced Mode isn’t built yet. This shows how it will work."
-)
 
 # Preview window
 PREVIEW_WINDOW_TITLE = QT_TRANSLATE_NOOP("RadioVideo", "Converted preview: {name}")
@@ -579,7 +579,7 @@ PLAY_SOURCE_TOOLTIP = QT_TRANSLATE_NOOP(
     "RadioVideo", "Play the file as it is, without converting anything (Ctrl+Shift+Space)"
 )
 
-# Advanced Mode (planned)
+# Advanced Mode
 ADV_TAB_VIDEO = QT_TRANSLATE_NOOP("RadioVideo", "Video")
 ADV_TAB_AUDIO = QT_TRANSLATE_NOOP("RadioVideo", "Audio")
 ADV_TAB_TRACKS = QT_TRANSLATE_NOOP("RadioVideo", "Tracks")
@@ -689,6 +689,56 @@ ADV_LOUDNESS_HELP = QT_TRANSLATE_NOOP(
 )
 ADV_SUMMARY = QT_TRANSLATE_NOOP("RadioVideo", "Output summary")
 ADV_SIZE_AFTER_PREVIEW = QT_TRANSLATE_NOOP("RadioVideo", "≈ size after preview")
+ADV_STREAM_COPY_UNAVAILABLE = QT_TRANSLATE_NOOP(
+    "RadioVideo",
+    "{container} can’t hold {codec} video as it is. Choose MKV on the Output tab to copy it.",
+)
+ADV_NO_VIDEO = QT_TRANSLATE_NOOP(
+    "RadioVideo", "{format} has no video. Pick a video format to change video settings."
+)
+ADV_ENCODER_SOFTWARE = QT_TRANSLATE_NOOP("RadioVideo", "{codec} · Software ({encoder})")
+ADV_ENCODER_HARDWARE = QT_TRANSLATE_NOOP("RadioVideo", "{codec} · Graphics card ({technology})")
+ADV_ENCODER_DETECTED = QT_TRANSLATE_NOOP("RadioVideo", "{technology} detected")
+ADV_ENCODER_SOFTWARE_ONLY = QT_TRANSLATE_NOOP(
+    "RadioVideo", "No graphics card encoder for {codec} was found on this computer."
+)
+ADV_PRESET_HARDWARE = QT_TRANSLATE_NOOP(
+    "RadioVideo", "The graphics card uses its own balanced preset."
+)
+ADV_VIDEO_BITRATE = QT_TRANSLATE_NOOP("RadioVideo", "Video bitrate")
+ADV_VIDEO_BITRATE_HELP = QT_TRANSLATE_NOOP(
+    "RadioVideo", "Bits per second for the picture. 8 Mb/s suits 1080p; 5 Mb/s suits 720p."
+)
+ADV_SET_BY_QUALITY = QT_TRANSLATE_NOOP("RadioVideo", "Set by quality ({value})")
+ADV_VARIABLE_QUALITY = QT_TRANSLATE_NOOP("RadioVideo", "variable, quality {value}")
+ADV_PIXEL_8BIT = QT_TRANSLATE_NOOP("RadioVideo", "8-bit, most compatible")
+ADV_PIXEL_422 = QT_TRANSLATE_NOOP("RadioVideo", "8-bit, more colour detail, less compatible")
+ADV_PIXEL_444 = QT_TRANSLATE_NOOP("RadioVideo", "8-bit, full colour detail, least compatible")
+ADV_PIXEL_10BIT = QT_TRANSLATE_NOOP("RadioVideo", "10-bit, smoother gradients, newer devices")
+ADV_AUDIO_COPY = QT_TRANSLATE_NOOP("RadioVideo", "Keep original audio (copy)")
+ADV_AUDIO_COPY_HELP = QT_TRANSLATE_NOOP(
+    "RadioVideo", "Copies the audio exactly as it is. Bitrate and channel settings don’t apply."
+)
+ADV_CODEC_HELP_VIDEO = QT_TRANSLATE_NOOP(
+    "RadioVideo", "Only codecs that {container} can hold are listed."
+)
+ADV_CODEC_HELP_AUDIO = QT_TRANSLATE_NOOP(
+    "RadioVideo", "The codec is the format itself. Pick another format to change it."
+)
+ADV_NO_AUDIO_KEPT = QT_TRANSLATE_NOOP(
+    "RadioVideo", "No audio track is kept. Choose tracks on the Tracks tab."
+)
+ADV_TRACK_NOT_SUPPORTED = QT_TRANSLATE_NOOP("RadioVideo", "{format} can’t store this track")
+ADV_TRACK_ONE_OF = QT_TRANSLATE_NOOP(
+    "RadioVideo", "Only one {kind} track fits; checking another replaces it."
+)
+ADV_DEINTERLACE_OFF = QT_TRANSLATE_NOOP("RadioVideo", "Off")
+ADV_DEINTERLACE_ALWAYS = QT_TRANSLATE_NOOP("RadioVideo", "Always")
+ADV_LOUDNESS_COPY = QT_TRANSLATE_NOOP(
+    "RadioVideo", "Not available while the audio is copied as it is."
+)
+CUSTOM_QUALITY = QT_TRANSLATE_NOOP("RadioVideo", "Quality: Custom (set in Advanced)")
+CUSTOM_RESET = QT_TRANSLATE_NOOP("RadioVideo", "Reset to Balanced")
 
 # Queue (planned)
 QUEUE_TITLE = QT_TRANSLATE_NOOP("RadioVideo", "Queue")

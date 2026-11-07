@@ -16,6 +16,7 @@ from PySide6.QtGui import QColor, QImage, QLinearGradient, QPainter, QPixmap
 from PySide6.QtWidgets import QApplication, QDialog, QWidget
 
 from radio_video.ffmpeg.locator import FFmpegTools
+from radio_video.models.advanced import AdvancedChoices
 from radio_video.models.estimate import estimate_output_size
 from radio_video.models.hardware import NVENC, HardwareSupport
 from radio_video.models.media import MediaInfo
@@ -148,6 +149,11 @@ def _advanced(tab: str) -> Callable[[MainWindow], None]:
         window.convert_page.file.panel.advanced.tabs.set_current(tab)
 
     return apply
+
+
+def _custom(window: MainWindow) -> None:
+    _loaded(window)
+    window.machine.set_advanced(AdvancedChoices(crf=20, preset="slow", height=720))
 
 
 def _page(page: Page) -> Callable[[MainWindow], None]:
@@ -294,8 +300,11 @@ STATES = (
     GalleryState("pv-original", "Original: played as it is", _original),
     GalleryState("quit", "Quit during conversion", _quit),
     GalleryState("about", "About", _about),
-    GalleryState("adv-video", "Advanced Mode: Video (planned)", _advanced("video")),
-    GalleryState("adv-tracks", "Advanced Mode: Tracks (planned)", _advanced("tracks")),
+    GalleryState("adv-video", "Advanced Mode: Video", _advanced("video")),
+    GalleryState("adv-audio", "Advanced Mode: Audio", _advanced("audio")),
+    GalleryState("adv-tracks", "Advanced Mode: Tracks", _advanced("tracks")),
+    GalleryState("adv-output", "Advanced Mode: Output and filters", _advanced("output")),
+    GalleryState("custom", "Simple Mode after Advanced changes", _custom),
     GalleryState("queue", "Queue (planned)", _page(Page.QUEUE)),
     GalleryState("history", "History (planned)", _page(Page.HISTORY)),
     GalleryState("settings", "Settings (planned)", _page(Page.SETTINGS)),
