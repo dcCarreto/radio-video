@@ -126,7 +126,7 @@ jobs:
           Start-Process -Wait -FilePath "$app/radio-video.exe" `
             -ArgumentList "--ui-gallery", "--capture", "smoke", "--states", "start,loaded"
           if (-not (Test-Path "smoke\loaded-light-l.png")) { throw "The frozen app did not start" }
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: windows-installer
           path: dist/Radio-Video-Setup-*.exe

@@ -35,7 +35,7 @@ jobs:
       - name: Determine next version
         id: version
         run: python scripts/next_version.py --notes "$RUNNER_TEMP/notes.md"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: steps.version.outputs.release == 'true'
         with:
           name: release-notes
@@ -59,7 +59,7 @@ jobs:
         run: |
           python -m pip install build
           python -m build
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: python-dist
           path: dist/*
@@ -91,7 +91,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: python scripts/build_installer.py --version "${{ needs.version.outputs.version }}"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: windows-installer
           path: |
